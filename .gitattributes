@@ -1,0 +1,5 @@
+Chicago/reviews.csv/reviews.csv filter=lfs diff=lfs merge=lfs -text
+New[[:space:]]York/calendar.csv/calendar.csv filter=lfs diff=lfs merge=lfs -text
+New[[:space:]]York/reviews.csv/reviews.csv filter=lfs diff=lfs merge=lfs -text
+data/processed/chicago_reviews_clean.csv filter=lfs diff=lfs merge=lfs -text
+data/processed/newyork_reviews_clean.csv filter=lfs diff=lfs merge=lfs -text
