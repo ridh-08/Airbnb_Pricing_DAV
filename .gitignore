@@ -20,3 +20,6 @@ Thumbs.db
 
 # Validation/generated intermediates
 outputs/validation/
+
+# Local-only notes/instructions
+instructions.py
