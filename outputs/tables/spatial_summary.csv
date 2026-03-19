@@ -1,0 +1,3 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price
+newyork,233,226,0.97,Fort Wadsworth,600.0
+chicago,77,76,0.987,Loop,2395.959114139693
