@@ -6,21 +6,40 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+from src.config import TABLES_DIR, PLOTS_DIR, discover_processed_city_files, normalize_city_name
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
-PLOTS_DIR = BASE_DIR / "outputs" / "plots"
-TABLES_DIR = BASE_DIR / "outputs" / "tables"
 
-CALENDAR_FILES = {
-    "newyork": PROCESSED_DIR / "newyork_calendar_sample_clean.csv",
-    "chicago": PROCESSED_DIR / "chicago_calendar_sample_clean.csv",
-}
+MONTH_ORDER = list(range(1, 13))
+MONTH_LABELS = [
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+]
+WEEKDAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def _load_calendar_data() -> pd.DataFrame:
+def _load_calendar_data(city_name: str | None = None) -> pd.DataFrame:
+    calendar_files = discover_processed_city_files("calendar_sample_clean")
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        calendar_files = {k: v for k, v in calendar_files.items() if k == city_key}
+
+    if not calendar_files:
+        raise FileNotFoundError("No cleaned calendar samples found. Run preprocessing first.")
+
     parts: list[pd.DataFrame] = []
-    for city, path in CALENDAR_FILES.items():
+    for city, path in calendar_files.items():
         if not path.exists():
             raise FileNotFoundError(
                 f"Missing cleaned calendar sample for {city}: {path}. Run preprocessing first."
@@ -62,11 +81,210 @@ def _pick_representative_listings(city_df: pd.DataFrame, n_listings: int = 5) ->
     return chosen
 
 
-def plot_selected_listing_price_trends(calendar_df: pd.DataFrame) -> Path:
+def engineer_calendar_temporal_features(
+    calendar_df: pd.DataFrame,
+    city_name: str | None = None,
+) -> pd.DataFrame:
+    """Build month x weekday aggregates for price and availability."""
+    work = calendar_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"].astype(str).str.lower() == city_key].copy()
+
+    if work.empty:
+        return pd.DataFrame(
+            columns=[
+                "city",
+                "month_num",
+                "month",
+                "weekday_num",
+                "weekday",
+                "avg_price",
+                "availability_rate",
+            ]
+        )
+
+    work["month_num"] = work["date"].dt.month
+    work["weekday_num"] = work["date"].dt.weekday
+    temporal = (
+        work.groupby(["city", "month_num", "weekday_num"], as_index=False)
+        .agg(
+            avg_price=("price", "mean"),
+            availability_rate=("available", "mean"),
+        )
+        .sort_values(["city", "month_num", "weekday_num"]) 
+        .reset_index(drop=True)
+    )
+
+    temporal["month"] = pd.Categorical(
+        temporal["month_num"].map(dict(zip(MONTH_ORDER, MONTH_LABELS))),
+        categories=MONTH_LABELS,
+        ordered=True,
+    )
+    temporal["weekday"] = pd.Categorical(
+        temporal["weekday_num"].map(dict(enumerate(WEEKDAY_ORDER))),
+        categories=WEEKDAY_ORDER,
+        ordered=True,
+    )
+
+    temporal = temporal[
+        [
+            "city",
+            "month_num",
+            "month",
+            "weekday_num",
+            "weekday",
+            "avg_price",
+            "availability_rate",
+        ]
+    ]
+    return temporal
+
+
+def export_calendar_temporal_summary(
+    temporal_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
+    """Export month-weekday calendar aggregates for downstream analysis."""
+    out_dir = output_dir or TABLES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    out_path = out_dir / f"calendar_temporal_summary{suffix}.csv"
+    temporal_df.to_csv(out_path, index=False)
+    return out_path
+
+
+def _plot_temporal_heatmap(
+    temporal_df: pd.DataFrame,
+    metric_col: str,
+    title_prefix: str,
+    out_name: str,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
+    """Plot month x weekday heatmaps with a consistent metric color scale across cities."""
+    if temporal_df.empty:
+        raise ValueError("Temporal dataframe is empty; cannot create heatmap.")
+
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    work = temporal_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"].astype(str).str.lower() == city_key].copy()
+
+    if work.empty:
+        raise ValueError("No city rows available after filtering for heatmap.")
+
+    city_keys = sorted(work["city"].astype(str).str.lower().unique().tolist())
+    n_cities = len(city_keys)
+
+    vmin = float(work[metric_col].min())
+    vmax = float(work[metric_col].max())
+    if vmin == vmax:
+        vmax = vmin + 1e-9
+
+    if n_cities == 1:
+        fig, ax = plt.subplots(1, 1, figsize=(8.5, 6.5))
+        axes = [ax]
+    else:
+        ncols = 3
+        nrows = (n_cities + ncols - 1) // ncols
+        fig, axes_arr = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4.5 * nrows), sharex=False, sharey=False)
+        axes = list(axes_arr.ravel())
+
+    heatmap_ref = None
+    for idx, city in enumerate(city_keys):
+        ax = axes[idx]
+        city_df = work[work["city"].astype(str).str.lower() == city].copy()
+        pivot = city_df.pivot(index="month", columns="weekday", values=metric_col)
+        pivot = pivot.reindex(index=MONTH_LABELS, columns=WEEKDAY_ORDER)
+
+        hm = sns.heatmap(
+            pivot,
+            ax=ax,
+            cmap="YlOrRd",
+            vmin=vmin,
+            vmax=vmax,
+            cbar=False,
+            linewidths=0.3,
+            linecolor="#f2f2f2",
+        )
+        heatmap_ref = hm
+        ax.set_title(city.title())
+        ax.set_xlabel("Weekday")
+        ax.set_ylabel("Month")
+
+    for j in range(n_cities, len(axes)):
+        axes[j].axis("off")
+
+    if heatmap_ref is not None:
+        colorbar = fig.colorbar(
+            heatmap_ref.collections[0],
+            ax=axes,
+            fraction=0.025,
+            pad=0.02,
+        )
+        colorbar.set_label(title_prefix)
+
+    fig.suptitle(f"{title_prefix}: Month x Weekday", fontsize=14)
+    fig.tight_layout(rect=[0, 0, 0.96, 0.95])
+
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    out_path = out_dir / f"{out_name}{suffix}.png"
+    fig.savefig(out_path, dpi=160)
+    plt.close(fig)
+    return out_path
+
+
+def plot_calendar_price_heatmap(
+    temporal_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
+    """Plot calendar price heatmap (month x weekday)."""
+    return _plot_temporal_heatmap(
+        temporal_df,
+        metric_col="avg_price",
+        title_prefix="Average Price",
+        out_name="calendar_price_heatmap_month_weekday",
+        output_dir=output_dir,
+        city_name=city_name,
+    )
+
+
+def plot_calendar_availability_heatmap(
+    temporal_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
+    """Plot calendar availability heatmap (month x weekday)."""
+    return _plot_temporal_heatmap(
+        temporal_df,
+        metric_col="availability_rate",
+        title_prefix="Availability Rate",
+        out_name="calendar_availability_heatmap_month_weekday",
+        output_dir=output_dir,
+        city_name=city_name,
+    )
+
+
+def plot_selected_listing_price_trends(
+    calendar_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
     """Plot time-wise price trends for selected listings in each city."""
+    work = calendar_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"].astype(str).str.lower() == city_key].copy()
+
     selected_parts: list[pd.DataFrame] = []
-    for city in sorted(calendar_df["city"].unique().tolist()):
-        city_df = calendar_df[calendar_df["city"] == city]
+    for city in sorted(work["city"].unique().tolist()):
+        city_df = work[work["city"] == city]
         chosen_ids = _pick_representative_listings(city_df, n_listings=5)
         if not chosen_ids:
             continue
@@ -96,16 +314,26 @@ def plot_selected_listing_price_trends(calendar_df: pd.DataFrame) -> Path:
     plt.ylabel("Price")
     plt.legend(title="City_Listing", bbox_to_anchor=(1.02, 1), loc="upper left")
 
-    out_path = PLOTS_DIR / "calendar_price_variation_selected_listings.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    out_path = out_dir / f"calendar_price_variation_selected_listings{suffix}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
     return out_path
 
 
-def plot_city_level_availability_trend(calendar_df: pd.DataFrame) -> Path:
+def plot_city_level_availability_trend(
+    calendar_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
     """Plot monthly availability rate trend by city."""
     trend = calendar_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        trend = trend[trend["city"].astype(str).str.lower() == city_key].copy()
     trend["month"] = trend["date"].dt.to_period("M").dt.to_timestamp()
 
     monthly = (
@@ -127,17 +355,29 @@ def plot_city_level_availability_trend(calendar_df: pd.DataFrame) -> Path:
     plt.ylabel("Availability Rate")
     plt.ylim(0, 1)
 
-    out_path = PLOTS_DIR / "calendar_availability_trend.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    out_path = out_dir / f"calendar_availability_trend{suffix}.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
     return out_path
 
 
-def export_calendar_summary(calendar_df: pd.DataFrame) -> Path:
+def export_calendar_summary(
+    calendar_df: pd.DataFrame,
+    output_dir: Path | None = None,
+    city_name: str | None = None,
+) -> Path:
     """Export compact calendar trend summary for reporting."""
+    work = calendar_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"].astype(str).str.lower() == city_key].copy()
+
     summary = (
-        calendar_df.groupby("city", as_index=False)
+        work.groupby("city", as_index=False)
         .agg(
             rows=("listing_id", "size"),
             unique_listings=("listing_id", "nunique"),
@@ -154,23 +394,62 @@ def export_calendar_summary(calendar_df: pd.DataFrame) -> Path:
     summary["avg_price"] = summary["avg_price"].round(2)
     summary["median_price"] = summary["median_price"].round(2)
 
-    out_path = TABLES_DIR / "calendar_summary.csv"
+    out_dir = output_dir or TABLES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    out_path = out_dir / f"calendar_summary{suffix}.csv"
     summary.to_csv(out_path, index=False)
     return out_path
 
 
-def run_calendar_analysis() -> tuple[list[Path], Path]:
+def run_calendar_analysis(
+    city_name: str | None = None,
+    plots_output_dir: Path | None = None,
+    tables_output_dir: Path | None = None,
+) -> tuple[list[Path], Path]:
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
-    calendar_df = _load_calendar_data()
+    calendar_df = _load_calendar_data(city_name=city_name)
+    temporal_df = engineer_calendar_temporal_features(calendar_df, city_name=city_name)
 
-    price_plot = plot_selected_listing_price_trends(calendar_df)
-    availability_plot = plot_city_level_availability_trend(calendar_df)
-    summary_path = export_calendar_summary(calendar_df)
+    price_plot = plot_selected_listing_price_trends(
+        calendar_df,
+        output_dir=plots_output_dir,
+        city_name=city_name,
+    )
+    availability_plot = plot_city_level_availability_trend(
+        calendar_df,
+        output_dir=plots_output_dir,
+        city_name=city_name,
+    )
+    summary_path = export_calendar_summary(
+        calendar_df,
+        output_dir=tables_output_dir,
+        city_name=city_name,
+    )
 
-    return [price_plot, availability_plot], summary_path
+    temporal_summary_path = export_calendar_temporal_summary(
+        temporal_df,
+        output_dir=tables_output_dir,
+        city_name=city_name,
+    )
+
+    price_heatmap = plot_calendar_price_heatmap(
+        temporal_df,
+        output_dir=plots_output_dir,
+        city_name=city_name,
+    )
+    availability_heatmap = plot_calendar_availability_heatmap(
+        temporal_df,
+        output_dir=plots_output_dir,
+        city_name=city_name,
+    )
+
+    print(f"Calendar temporal summary table saved: {temporal_summary_path}")
+
+    return [price_plot, availability_plot, price_heatmap, availability_heatmap], summary_path
 
 
 def main() -> None:

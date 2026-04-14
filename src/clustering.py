@@ -13,16 +13,10 @@ from sklearn.mixture import GaussianMixture
 from sklearn.metrics import silhouette_score
 from sklearn.preprocessing import StandardScaler
 
+from src.config import CITY_COLORS, PROCESSED_DIR, TABLES_DIR, PLOTS_DIR, discover_processed_city_files, normalize_city_name
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
-TABLES_DIR = BASE_DIR / "outputs" / "tables"
-PLOTS_DIR = BASE_DIR / "outputs" / "plots"
-
-CITY_COLORS = {
-    "newyork": "#FF5A5F",
-    "chicago": "#00A699",
-}
 
 CLUSTER_FEATURES = [
     "log_price",
@@ -118,6 +112,222 @@ def build_cluster_profile_table(
         .rename(columns={cluster_col: "cluster"})
     )
     return grouped.merge(counts, on=["city", "cluster"], how="left")
+
+
+def create_host_level_features(
+    listings_df: pd.DataFrame,
+    city_name: str | None = None,
+) -> pd.DataFrame:
+    """Aggregate listing-level rows into host-level strategy features.
+
+    Output columns include:
+    - host_id
+    - city
+    - avg_price
+    - availability_365
+    - review_density
+    - number_of_listings_per_host
+    - avg_reviews
+    """
+    if listings_df.empty:
+        raise ValueError("Input listings_df is empty.")
+
+    work = listings_df.copy()
+    if "city" not in work.columns:
+        work["city"] = "unknown"
+    work["city"] = work["city"].astype(str).str.lower()
+
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"] == city_key].copy()
+
+    if work.empty:
+        raise ValueError("No rows available after city filtering for host feature creation.")
+
+    host_col = "host_id" if "host_id" in work.columns else "listing_id"
+    if host_col not in work.columns:
+        raise KeyError("Expected 'host_id' or fallback 'listing_id' in listings_df.")
+
+    work["host_id"] = work[host_col].astype(str)
+    work["price"] = pd.to_numeric(work.get("price"), errors="coerce")
+    work["availability_365"] = pd.to_numeric(work.get("availability_365"), errors="coerce")
+
+    if "review_density" in work.columns:
+        work["review_density"] = pd.to_numeric(work["review_density"], errors="coerce")
+    elif "reviews_per_month" in work.columns:
+        work["review_density"] = pd.to_numeric(work["reviews_per_month"], errors="coerce")
+    elif "number_of_reviews" in work.columns:
+        work["review_density"] = pd.to_numeric(work["number_of_reviews"], errors="coerce")
+    else:
+        work["review_density"] = np.nan
+
+    if "number_of_reviews" in work.columns:
+        work["number_of_reviews"] = pd.to_numeric(work["number_of_reviews"], errors="coerce")
+    else:
+        work["number_of_reviews"] = np.nan
+
+    listing_count_source = "listing_id" if "listing_id" in work.columns else "host_id"
+
+    host_df = (
+        work.groupby(["city", "host_id"], as_index=False)
+        .agg(
+            avg_price=("price", "mean"),
+            availability_365=("availability_365", "mean"),
+            review_density=("review_density", "mean"),
+            number_of_listings_per_host=(listing_count_source, "nunique"),
+            avg_reviews=("number_of_reviews", "mean"),
+        )
+        .sort_values(["city", "host_id"])
+        .reset_index(drop=True)
+    )
+
+    for col in ["avg_price", "availability_365", "review_density", "number_of_listings_per_host"]:
+        host_df[col] = pd.to_numeric(host_df[col], errors="coerce")
+
+    host_df = host_df.dropna(
+        subset=["avg_price", "availability_365", "review_density", "number_of_listings_per_host"]
+    )
+    if host_df.empty:
+        raise ValueError("No valid host rows after cleaning required strategy features.")
+    return host_df
+
+
+def cluster_host_strategies(
+    host_features_df: pd.DataFrame,
+    k: int = 3,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Cluster hosts into strategy groups using KMeans (k=3 by default)."""
+    required = [
+        "avg_price",
+        "availability_365",
+        "review_density",
+        "number_of_listings_per_host",
+    ]
+    missing = [col for col in required if col not in host_features_df.columns]
+    if missing:
+        raise KeyError(f"Missing required host features: {missing}")
+
+    work = host_features_df.copy()
+    for col in required:
+        work[col] = pd.to_numeric(work[col], errors="coerce")
+    work = work.dropna(subset=required).copy()
+    if len(work) < k:
+        raise ValueError(f"Need at least {k} host rows for clustering; got {len(work)}")
+
+    scaler = StandardScaler()
+    X_scaled = scaler.fit_transform(work[required])
+
+    model = KMeans(n_clusters=k, random_state=random_state, n_init=10)
+    work["host_cluster"] = model.fit_predict(X_scaled).astype(int)
+
+    summary = (
+        work.groupby("host_cluster", as_index=False)
+        .agg(
+            host_count=("host_id", "nunique"),
+            avg_price=("avg_price", "mean"),
+            avg_availability=("availability_365", "mean"),
+            avg_review_density=("review_density", "mean"),
+            avg_listings_per_host=("number_of_listings_per_host", "mean"),
+            avg_reviews=("avg_reviews", "mean"),
+        )
+        .sort_values("host_cluster")
+        .reset_index(drop=True)
+    )
+
+    return {
+        "host_labels": work,
+        "summary_stats": summary,
+        "model": model,
+        "scaler": scaler,
+        "feature_columns": required,
+    }
+
+
+def interpret_host_strategy_clusters(cluster_summary_df: pd.DataFrame) -> pd.DataFrame:
+    """Assign meaningful strategy names to clusters based on profile patterns."""
+    required = ["host_cluster", "avg_price", "avg_availability", "avg_review_density"]
+    missing = [col for col in required if col not in cluster_summary_df.columns]
+    if missing:
+        raise KeyError(f"Missing required summary columns: {missing}")
+
+    profile = cluster_summary_df.copy()
+    cols = ["avg_price", "avg_availability", "avg_review_density"]
+    z = profile[cols].apply(
+        lambda s: (s - s.mean()) / (s.std(ddof=0) if s.std(ddof=0) not in [0, np.nan] else 1.0)
+    )
+
+    scores = pd.DataFrame(
+        {
+            "host_cluster": profile["host_cluster"],
+            "occupancy maximizers": (-z["avg_price"] - z["avg_availability"] + z["avg_review_density"]),
+            "premium pricers": (z["avg_price"] + z["avg_availability"]),
+            "passive hosts": (z["avg_availability"] - z["avg_review_density"]),
+        }
+    )
+
+    remaining_clusters = set(scores["host_cluster"].tolist())
+    assigned: dict[int, str] = {}
+    for label_col in ["occupancy maximizers", "premium pricers", "passive hosts"]:
+        candidates = scores[scores["host_cluster"].isin(remaining_clusters)].copy()
+        if candidates.empty:
+            continue
+        best_cluster = int(candidates.sort_values(label_col, ascending=False).iloc[0]["host_cluster"])
+        assigned[best_cluster] = label_col
+        remaining_clusters.discard(best_cluster)
+
+    for cluster in sorted(remaining_clusters):
+        assigned[int(cluster)] = f"other_cluster_{int(cluster)}"
+
+    labelled = profile.copy()
+    labelled["cluster_name"] = labelled["host_cluster"].map(assigned)
+
+    out_cols = [
+        "host_cluster",
+        "cluster_name",
+        "host_count",
+        "avg_price",
+        "avg_availability",
+        "avg_review_density",
+        "avg_reviews",
+    ]
+    existing_cols = [c for c in out_cols if c in labelled.columns]
+    return labelled[existing_cols].sort_values("host_cluster").reset_index(drop=True)
+
+
+def run_host_strategy_segmentation(
+    listings_df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Run host strategy segmentation workflow and save outputs.
+
+    Saves:
+    - host_strategy_cluster_labels{suffix}.csv
+    - host_strategy_cluster_summary{suffix}.csv
+    """
+    tables_dir = output_dir or TABLES_DIR
+    tables_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+
+    host_features = create_host_level_features(listings_df, city_name=city_name)
+    clustered = cluster_host_strategies(host_features, k=3, random_state=random_state)
+    interpreted = interpret_host_strategy_clusters(clustered["summary_stats"])
+
+    labels_path = tables_dir / f"host_strategy_cluster_labels{suffix}.csv"
+    summary_path = tables_dir / f"host_strategy_cluster_summary{suffix}.csv"
+    clustered["host_labels"].to_csv(labels_path, index=False)
+    interpreted.to_csv(summary_path, index=False)
+
+    return {
+        "host_features": host_features,
+        "host_labels": clustered["host_labels"],
+        "summary_stats": clustered["summary_stats"],
+        "interpreted_summary": interpreted,
+        "labels_path": labels_path,
+        "summary_path": summary_path,
+    }
 
 
 def run_kmeans_with_pca(
@@ -344,7 +554,8 @@ def run_pooled_kmeans_clustering(
     composition["pct_within_cluster"] = 100 * composition["count"] / total_per_cluster
 
     pivot = composition.pivot(index="cluster_pooled", columns="city", values="pct_within_cluster").fillna(0)
-    pivot = pivot.reindex(columns=[c for c in ["newyork", "chicago"] if c in pivot.columns])
+    city_order = sorted(pivot.columns.tolist())
+    pivot = pivot.reindex(columns=city_order)
 
     fig, ax = plt.subplots(figsize=(10, 6))
     bottom = np.zeros(len(pivot))
@@ -394,6 +605,7 @@ def run_clustering_on_dataframe(
     output_tables_dir: Path | None = None,
     output_plots_dir: Path | None = None,
     random_state: int = 42,
+    city_name: str | None = None,
 ) -> dict[str, Any]:
     """Run all clustering methods on a pooled dataframe and return method outputs."""
     if "city" not in df.columns:
@@ -404,12 +616,18 @@ def run_clustering_on_dataframe(
     tables_dir.mkdir(parents=True, exist_ok=True)
     plots_dir.mkdir(parents=True, exist_ok=True)
 
+    work_df = df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work_df = work_df[work_df["city"].astype(str).str.lower() == city_key].copy()
+
     city_results: dict[str, Any] = {}
     profiles: list[pd.DataFrame] = []
     best_k_values: list[int] = []
 
-    for city in ["newyork", "chicago"]:
-        city_df = df[df["city"].astype(str).str.lower() == city].copy()
+    city_keys = sorted(work_df["city"].astype(str).str.lower().unique().tolist())
+    for city in city_keys:
+        city_df = work_df[work_df["city"].astype(str).str.lower() == city].copy()
         if city_df.empty:
             continue
 
@@ -432,7 +650,7 @@ def run_clustering_on_dataframe(
         f"(median of per-city best-k values: {best_k_values})"
     )
     pooled_result = run_pooled_kmeans_clustering(
-        df,
+        work_df,
         k=pooled_k,
         output_dir=plots_dir,
         random_state=random_state,
@@ -456,27 +674,27 @@ def run_clustering_on_dataframe(
     }
 
 
-def run_clustering() -> tuple[list[Path], Path]:
-    """Execute enhanced clustering pipeline for New York and Chicago and pooled data."""
+def run_clustering(city_name: str | None = None) -> tuple[list[Path], Path]:
+    """Execute enhanced clustering pipeline for all available featured city files."""
     PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     PLOTS_DIR.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
-    city_map = {
-        "newyork": "ny_clustered.csv",
-        "chicago": "chicago_clustered.csv",
-    }
+    city_files = discover_processed_city_files("featured")
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        city_files = {k: v for k, v in city_files.items() if k == city_key}
+
+    if not city_files:
+        raise FileNotFoundError("No featured city files found. Run feature_engineering first.")
 
     saved_cluster_files: list[Path] = []
     per_method_profiles: list[pd.DataFrame] = []
     best_k_values: list[int] = []
     all_city_frames: list[pd.DataFrame] = []
 
-    for city_key, out_name in city_map.items():
-        in_path = PROCESSED_DIR / f"{city_key}_featured.csv"
-        if not in_path.exists():
-            raise FileNotFoundError(f"Missing featured file for {city_key}: {in_path}")
+    for city_key, in_path in city_files.items():
 
         city_df = pd.read_csv(in_path)
         if "city" not in city_df.columns:
@@ -492,7 +710,7 @@ def run_clustering() -> tuple[list[Path], Path]:
         clustered_df = result["labelled_df"].copy()
         clustered_df["cluster"] = clustered_df["cluster_kmeans"]
 
-        out_path = PROCESSED_DIR / out_name
+        out_path = PROCESSED_DIR / f"{city_key}_clustered.csv"
         clustered_df.to_csv(out_path, index=False)
         saved_cluster_files.append(out_path)
         best_k = int(result["kmeans"]["best_k"])

@@ -23,3 +23,27 @@ outputs/validation/
 
 # Local-only notes/instructions
 instructions.py
+
+# Raw data folders (will be pushed separately)
+Austin/calendar.csv/
+Austin/listings*
+Austin/reviews.csv/
+Chicago/calendar.csv/
+Chicago/listings*
+Chicago/reviews.csv/
+Los Angeles/calendar.csv/
+Los Angeles/listings*
+Los Angeles/reviews.csv/
+Nashville/calendar*
+Nashville/listings*
+Nashville/reviews*
+New Orleans/calendar.csv/
+New Orleans/listings*
+New Orleans/reviews.csv/
+New York/calendar.csv/
+New York/listings*
+New York/reviews.csv/
+data/raw/
+
+# Large processed data files
+data/processed/

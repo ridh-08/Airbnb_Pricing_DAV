@@ -2,21 +2,21 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Any
+import importlib
 
 import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_squared_error, r2_score
+from sklearn.model_selection import train_test_split
+
+from src.config import CITY_COLORS, PLOTS_DIR, normalize_city_name
 
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PLOTS_DIR = BASE_DIR / "outputs" / "plots"
-
-CITY_COLORS = {
-    "newyork": "#FF5A5F",
-    "chicago": "#00A699",
-}
 
 BASE_FEATURES = [
     "accommodates",
@@ -25,6 +25,253 @@ BASE_FEATURES = [
     "reviews_per_month",
     "minimum_nights",
 ]
+
+
+def train_xgboost_model(
+    df: pd.DataFrame,
+    target: str = "price",
+    random_state: int = 42,
+) -> dict[str, Any]:
+    """Train an XGBoost regressor using selected listing features.
+
+    Steps implemented:
+    - Uses features: accommodates, amenities_count, availability_365, review_density,
+      neighbourhood (one-hot encoded).
+    - Applies an 80-20 train-test split.
+    - Trains XGBoost regressor with deterministic random_state.
+    - Returns model, predictions, and evaluation metrics (R2, RMSE).
+    """
+    try:
+        xgboost_module = importlib.import_module("xgboost")
+        XGBRegressor = getattr(xgboost_module, "XGBRegressor")
+    except Exception as exc:
+        raise ImportError(
+            "xgboost is required for train_xgboost_model(). Install with: pip install xgboost"
+        ) from exc
+
+    required = ["accommodates", "amenities_count", "availability_365", "review_density", "neighbourhood", target]
+    missing = [col for col in required if col not in df.columns]
+    if missing:
+        raise KeyError(f"Missing required columns for XGBoost training: {missing}")
+
+    work = df.copy()
+    numeric_cols = ["accommodates", "amenities_count", "availability_365", "review_density", target]
+    for col in numeric_cols:
+        work[col] = pd.to_numeric(work[col], errors="coerce")
+
+    work["neighbourhood"] = work["neighbourhood"].astype(str)
+    work = work.dropna(subset=required)
+
+    if work.empty:
+        raise ValueError("No valid rows available after cleaning for XGBoost training.")
+
+    X_num = work[["accommodates", "amenities_count", "availability_365", "review_density"]].copy()
+    X_neigh = pd.get_dummies(work["neighbourhood"], prefix="neigh", drop_first=True)
+    X = pd.concat([X_num, X_neigh], axis=1).astype(float)
+    y = work[target].astype(float)
+
+    X_train, X_test, y_train, y_test = train_test_split(
+        X,
+        y,
+        test_size=0.2,
+        random_state=random_state,
+    )
+
+    model = XGBRegressor(
+        objective="reg:squarederror",
+        n_estimators=400,
+        learning_rate=0.05,
+        max_depth=6,
+        subsample=0.9,
+        colsample_bytree=0.9,
+        random_state=random_state,
+        n_jobs=-1,
+    )
+    model.fit(X_train, y_train)
+
+    predictions = model.predict(X_test)
+    r2 = float(r2_score(y_test, predictions))
+    rmse = float(np.sqrt(mean_squared_error(y_test, predictions)))
+
+    return {
+        "model": model,
+        "predictions": predictions,
+        "metrics": {
+            "r2": r2,
+            "rmse": rmse,
+        },
+        "X_test": X_test,
+        "y_test": y_test,
+    }
+
+
+def compute_shap_feature_importance(
+    model: Any,
+    X: pd.DataFrame,
+) -> pd.DataFrame:
+    """Compute SHAP values for a trained tree model and return feature-importance summary.
+
+    Uses shap.TreeExplainer and ranks features by mean absolute SHAP value.
+    """
+    try:
+        shap_module = importlib.import_module("shap")
+        TreeExplainer = getattr(shap_module, "TreeExplainer")
+    except Exception as exc:
+        raise ImportError(
+            "shap is required for compute_shap_feature_importance(). Install with: pip install shap"
+        ) from exc
+
+    if not isinstance(X, pd.DataFrame):
+        raise TypeError("X must be a pandas DataFrame with feature columns.")
+    if X.empty:
+        raise ValueError("X is empty; SHAP values cannot be computed.")
+
+    explainer = TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    shap_array = np.asarray(shap_values)
+
+    # Handle both (n_samples, n_features) and multi-output shapes.
+    if shap_array.ndim == 3:
+        shap_array = np.mean(np.abs(shap_array), axis=0)
+    elif shap_array.ndim == 2:
+        shap_array = np.abs(shap_array)
+    else:
+        raise ValueError(f"Unexpected SHAP values shape: {shap_array.shape}")
+
+    summary_df = pd.DataFrame(
+        {
+            "feature": X.columns,
+            "mean_abs_shap": shap_array.mean(axis=0),
+        }
+    ).sort_values("mean_abs_shap", ascending=False)
+
+    return summary_df.reset_index(drop=True)
+
+
+def save_shap_beeswarm_plot(
+    model: Any,
+    X: pd.DataFrame,
+    city_name: str,
+    output_dir: Path,
+    top_n: int = 10,
+) -> Path:
+    """Generate and save a SHAP beeswarm plot for a trained tree model.
+
+    The beeswarm highlights top_n features and saves a clean labeled PNG.
+    """
+    try:
+        shap_module = importlib.import_module("shap")
+        TreeExplainer = getattr(shap_module, "TreeExplainer")
+        summary_plot = getattr(shap_module, "summary_plot")
+    except Exception as exc:
+        raise ImportError(
+            "shap is required for save_shap_beeswarm_plot(). Install with: pip install shap"
+        ) from exc
+
+    if not isinstance(X, pd.DataFrame):
+        raise TypeError("X must be a pandas DataFrame with feature columns.")
+    if X.empty:
+        raise ValueError("X is empty; SHAP beeswarm plot cannot be generated.")
+
+    city_key = normalize_city_name(city_name)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    explainer = TreeExplainer(model)
+    shap_values = explainer.shap_values(X)
+    if isinstance(shap_values, list):
+        shap_values = shap_values[0]
+
+    plt.figure(figsize=(11, 6.5))
+    summary_plot(
+        shap_values,
+        X,
+        plot_type="dot",
+        max_display=top_n,
+        show=False,
+    )
+    plt.title(f"{city_key.title()} XGBoost SHAP Beeswarm (Top {top_n} Features)", pad=12)
+    plt.xlabel("SHAP value (impact on model output)")
+    plt.tight_layout()
+
+    out_path = output_dir / f"{city_key}_xgboost_shap_beeswarm_top{top_n}.png"
+    plt.savefig(out_path, dpi=180, bbox_inches="tight")
+    plt.close()
+    return out_path
+
+
+def compare_model_performance(
+    city_models_dict: dict[str, Any],
+    output_dir: Path | None = None,
+) -> pd.DataFrame:
+    """Compare model performance across cities using R2 and plot a bar chart.
+
+    Parameters
+    ----------
+    city_models_dict:
+        Mapping city -> trained model payload. Supported shapes per city value:
+        - {"metrics": {"r2": <float>}}
+        - {"r2": <float>}
+        - <float> (direct R2)
+    output_dir:
+        Optional directory to save chart. Defaults to outputs/plots.
+
+    Returns
+    -------
+    pd.DataFrame
+        Dataframe with columns: city, r2 sorted by descending r2.
+    """
+    rows: list[dict[str, Any]] = []
+
+    for city, payload in city_models_dict.items():
+        r2_value: float | None = None
+
+        if isinstance(payload, (float, int)):
+            r2_value = float(payload)
+        elif isinstance(payload, dict):
+            if "metrics" in payload and isinstance(payload["metrics"], dict):
+                metric_r2 = payload["metrics"].get("r2")
+                if metric_r2 is not None:
+                    r2_value = float(metric_r2)
+            elif "r2" in payload:
+                r2_value = float(payload["r2"])
+
+        if r2_value is None:
+            raise KeyError(
+                f"Could not extract R2 for city '{city}'. Expected float, {{'r2': ...}}, or {{'metrics': {{'r2': ...}}}}."
+            )
+
+        rows.append({"city": str(city).lower(), "r2": r2_value})
+
+    comparison_df = pd.DataFrame(rows)
+    if comparison_df.empty:
+        raise ValueError("No city model performance entries provided.")
+
+    comparison_df = comparison_df.sort_values("r2", ascending=False).reset_index(drop=True)
+
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    plt.figure(figsize=(10, 6))
+    ax = sns.barplot(
+        data=comparison_df,
+        x="city",
+        y="r2",
+        hue="city",
+        legend=False,
+        palette=[CITY_COLORS.get(c, "#555555") for c in comparison_df["city"]],
+    )
+    ax.set_title("Model R2 Comparison Across Cities (Higher R2 = More Predictable Market)")
+    ax.set_xlabel("City")
+    ax.set_ylabel("R2")
+    ax.set_ylim(bottom=min(-0.05, float(comparison_df["r2"].min()) - 0.05), top=1.0)
+    plt.xticks(rotation=15)
+
+    out_path = out_dir / "model_r2_comparison_by_city.png"
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=160)
+    plt.close()
+
+    return comparison_df
 
 
 def _clean_city_frame(df: pd.DataFrame, city: str) -> pd.DataFrame:
@@ -128,7 +375,7 @@ def plot_rf_feature_importances(
     out_dir = output_dir or PLOTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    cities = [city for city in ["newyork", "chicago"] if city in results_by_city]
+    cities = sorted(results_by_city.keys())
     if not cities:
         raise ValueError("No city results were provided for plotting.")
 
@@ -228,21 +475,32 @@ def run_regression_analysis(
     output_dir: Path | None = None,
     top_n_neighbourhoods: int = 10,
     random_state: int = 42,
+    city_name: str | None = None,
 ) -> dict[str, Any]:
-    """Run full regression workflow for New York and Chicago and print clean summaries."""
+    """Run full regression workflow for all cities or one selected city."""
     sns.set_theme(style="whitegrid")
 
     results: dict[str, dict[str, Any]] = {}
-    for city in ["newyork", "chicago"]:
+    work = df.copy()
+    work["city"] = work["city"].astype(str).str.lower()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"] == city_key].copy()
+
+    cities = sorted(work["city"].dropna().unique().tolist())
+    for city in cities:
         results[city] = run_city_regression(
-            df,
+            work,
             city=city,
             top_n_neighbourhoods=top_n_neighbourhoods,
             random_state=random_state,
         )
 
+    if not results:
+        raise ValueError("No valid city rows available for regression analysis.")
+
     print("\n[regression] OLS Summary Tables")
-    for city in ["newyork", "chicago"]:
+    for city in cities:
         city_summary = results[city]["ols_summary"].copy()
         clean_summary = get_clean_ols_summary(city_summary)
         print(f"\n[regression] City: {city.title()} | R-squared: {results[city]['r_squared']:.4f}")

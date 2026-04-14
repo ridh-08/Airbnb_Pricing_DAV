@@ -7,45 +7,102 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from src.config import CITY_COLORS, PLOTS_DIR, TABLES_DIR, discover_processed_city_files, normalize_city_name
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
-PLOTS_DIR = BASE_DIR / "outputs" / "plots"
-TABLES_DIR = BASE_DIR / "outputs" / "tables"
-
-CITY_COLORS = {
-    "newyork": "#FF5A5F",
-    "chicago": "#00A699",
-}
 
 
-def load_featured_data() -> pd.DataFrame:
+def load_featured_data(city_name: str | None = None) -> pd.DataFrame:
     """Load and combine feature-enriched city datasets for EDA."""
-    ny_path = PROCESSED_DIR / "newyork_featured.csv"
-    chicago_path = PROCESSED_DIR / "chicago_featured.csv"
+    city_files = discover_processed_city_files("featured")
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        city_files = {k: v for k, v in city_files.items() if k == city_key}
 
-    if not ny_path.exists() or not chicago_path.exists():
+    if not city_files:
         raise FileNotFoundError(
             "Featured files are missing. Run feature_engineering.py first."
         )
 
-    ny = pd.read_csv(ny_path)
-    chicago = pd.read_csv(chicago_path)
-    combined = pd.concat([ny, chicago], ignore_index=True)
+    parts = [pd.read_csv(path) for path in city_files.values()]
+    combined = pd.concat(parts, ignore_index=True)
     if "price_imputed" not in combined.columns:
         combined["price_imputed"] = False
     return combined
 
 
-def _price_analysis_frame(df: pd.DataFrame) -> pd.DataFrame:
+def _price_analysis_frame(df: pd.DataFrame, city_name: str | None = None) -> pd.DataFrame:
     """Restrict to observed (non-imputed) prices for accurate price plots."""
     filtered = df[(df["price"] > 0) & (~df["price_imputed"])].copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        filtered = filtered[filtered["city"].astype(str).str.lower() == city_key].copy()
     return filtered
 
 
-def plot_price_distribution(df: pd.DataFrame) -> str:
+def compute_gini(price_array: object) -> float:
+    """Compute Gini coefficient from scratch for an array-like of prices.
+
+    Edge-case behavior:
+    - Missing/non-numeric values are ignored.
+    - Negative values are excluded.
+    - Empty input or all-zero values return 0.0.
+    """
+    if price_array is None:
+        return 0.0
+
+    values = pd.to_numeric(pd.Series(price_array), errors="coerce")
+    values = values[np.isfinite(values)]
+    values = values[values >= 0]
+
+    if values.empty:
+        return 0.0
+
+    sorted_vals = np.sort(values.to_numpy(dtype=float))
+    n = sorted_vals.size
+    total = sorted_vals.sum()
+
+    if n == 0 or total <= 0:
+        return 0.0
+
+    index = np.arange(1, n + 1, dtype=float)
+    gini = (2.0 * np.sum(index * sorted_vals)) / (n * total) - (n + 1.0) / n
+    return float(max(0.0, min(1.0, gini)))
+
+
+def compute_percentile_ratio(prices: object) -> float:
+    """Compute the price percentile ratio P90/P10.
+
+    Missing/non-numeric values are ignored and only non-negative values are used.
+    Returns np.nan when P10 is zero or no valid values exist.
+    """
+    if prices is None:
+        return float("nan")
+
+    values = pd.to_numeric(pd.Series(prices), errors="coerce")
+    values = values[np.isfinite(values)]
+    values = values[values >= 0]
+
+    if values.empty:
+        return float("nan")
+
+    p10 = float(np.percentile(values, 10))
+    p90 = float(np.percentile(values, 90))
+
+    if p10 <= 0:
+        return float("nan")
+
+    return float(p90 / p10)
+
+
+def plot_price_distribution(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Robust price distribution view using city-wise capping and log transform."""
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return "Insight: No observed prices are available for reliable distribution plotting."
 
@@ -87,32 +144,30 @@ def plot_price_distribution(df: pd.DataFrame) -> str:
     axes[1].set_xlabel("log(1 + price)")
     axes[1].set_ylabel("Density")
 
-    out_path = PLOTS_DIR / "price_distribution.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "price_distribution.png"
     fig.tight_layout()
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
-    ny_slice = plot_df.loc[plot_df["city"] == "newyork", "price"]
-    ch_slice = plot_df.loc[plot_df["city"] == "chicago", "price"]
-
-    if ny_slice.empty or ch_slice.empty:
-        missing_city = "New York" if ny_slice.empty else "Chicago"
-        return (
-            f"Insight: {missing_city} has insufficient observed prices in the source data, "
-            "so this distribution plot reflects only reliable city data."
-        )
-
-    ny_iqr = ny_slice.quantile(0.75) - ny_slice.quantile(0.25)
-    ch_iqr = ch_slice.quantile(0.75) - ch_slice.quantile(0.25)
-
-    if ny_iqr > ch_iqr:
-        return "Insight: New York shows wider middle-range price spread (IQR) than Chicago."
-    return "Insight: Chicago shows wider middle-range price spread (IQR) than New York."
+    iqr_by_city = (
+        plot_df.groupby("city")["price"].quantile(0.75)
+        - plot_df.groupby("city")["price"].quantile(0.25)
+    )
+    if iqr_by_city.empty:
+        return "Insight: Unable to compute IQR by city."
+    top_city = iqr_by_city.sort_values(ascending=False).index[0]
+    return f"Insight: {top_city.title()} shows the widest middle-range price spread (IQR)."
 
 
-def plot_price_by_room_type(df: pd.DataFrame) -> str:
+def plot_price_by_room_type(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Boxplot of listing price by room type across cities."""
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return "Insight: Skipped room-type boxplot because observed prices are unavailable."
 
@@ -130,7 +185,9 @@ def plot_price_by_room_type(df: pd.DataFrame) -> str:
     plt.xticks(rotation=15)
     plt.ylim(0, plot_df["price"].quantile(0.95))
 
-    out_path = PLOTS_DIR / "boxplot_price_by_room_type.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "boxplot_price_by_room_type.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
@@ -140,7 +197,11 @@ def plot_price_by_room_type(df: pd.DataFrame) -> str:
     return f"Insight: {top_room} has the highest median price among room types."
 
 
-def plot_correlation_heatmap(df: pd.DataFrame) -> str:
+def plot_correlation_heatmap(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Correlation heatmap of key numerical features."""
     numeric_cols = [
         "price",
@@ -151,7 +212,7 @@ def plot_correlation_heatmap(df: pd.DataFrame) -> str:
         "amenities_count",
         "review_density",
     ]
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return "Insight: Skipped correlation heatmap because observed-price rows are unavailable."
 
@@ -161,7 +222,9 @@ def plot_correlation_heatmap(df: pd.DataFrame) -> str:
     sns.heatmap(corr, annot=True, cmap="coolwarm", fmt=".2f", square=True)
     plt.title("Correlation Heatmap (Numerical Features)")
 
-    out_path = PLOTS_DIR / "correlation_heatmap.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "correlation_heatmap.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
@@ -171,9 +234,13 @@ def plot_correlation_heatmap(df: pd.DataFrame) -> str:
     return f"Insight: Price has a {polarity} relationship with availability_365 (corr={rel:.2f})."
 
 
-def plot_scatter_price_vs_availability(df: pd.DataFrame) -> str:
+def plot_scatter_price_vs_availability(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Scatter plot of price versus availability_365."""
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return "Insight: Skipped price vs availability scatter due to unavailable observed prices."
 
@@ -193,7 +260,9 @@ def plot_scatter_price_vs_availability(df: pd.DataFrame) -> str:
     plt.ylabel("Price")
     plt.ylim(0, sample["price"].quantile(0.98))
 
-    out_path = PLOTS_DIR / "scatter_price_vs_availability.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "scatter_price_vs_availability.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
@@ -201,9 +270,13 @@ def plot_scatter_price_vs_availability(df: pd.DataFrame) -> str:
     return "Insight: Higher-price listings tend to appear in lower-availability regions."
 
 
-def plot_scatter_price_vs_reviews(df: pd.DataFrame) -> str:
+def plot_scatter_price_vs_reviews(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Scatter plot of price versus number_of_reviews."""
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return "Insight: Skipped price vs reviews scatter due to unavailable observed prices."
 
@@ -223,7 +296,9 @@ def plot_scatter_price_vs_reviews(df: pd.DataFrame) -> str:
     plt.ylabel("Price")
     plt.ylim(0, sample["price"].quantile(0.98))
 
-    out_path = PLOTS_DIR / "scatter_price_vs_reviews.png"
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "scatter_price_vs_reviews.png"
     plt.tight_layout()
     plt.savefig(out_path, dpi=150)
     plt.close()
@@ -257,9 +332,16 @@ def _build_binned_summary(subset: pd.DataFrame, x_col: str, n_bins: int = 12) ->
     return binned
 
 
-def plot_roomtype_binned_smoothing(df: pd.DataFrame, x_col: str, x_label: str, out_name: str) -> str:
+def plot_roomtype_binned_smoothing(
+    df: pd.DataFrame,
+    x_col: str,
+    x_label: str,
+    out_name: str,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> str:
     """Plot room-type wise smoothed trends using quantile-bin mean prices."""
-    plot_df = _price_analysis_frame(df)
+    plot_df = _price_analysis_frame(df, city_name=city_name)
     if plot_df.empty:
         return f"Insight: Skipped {x_col} room-type smoothing due to unavailable observed prices."
 
@@ -303,7 +385,9 @@ def plot_roomtype_binned_smoothing(df: pd.DataFrame, x_col: str, x_label: str, o
     fig.suptitle(f"Room-Type Wise Smoothed Price Trend by {x_label}", fontsize=14)
     fig.tight_layout(rect=[0, 0.02, 1, 0.98])
 
-    out_path = PLOTS_DIR / out_name
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / out_name
     fig.savefig(out_path, dpi=150)
     plt.close(fig)
 
@@ -312,14 +396,17 @@ def plot_roomtype_binned_smoothing(df: pd.DataFrame, x_col: str, x_label: str, o
     return f"Insight: Generated room-type wise smoothed trend for {x_col} using quantile-bin mean price."
 
 
-def compute_neighbourhood_inequality_metrics(df: pd.DataFrame) -> pd.DataFrame:
+def compute_neighbourhood_inequality_metrics(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+) -> pd.DataFrame:
     """Compute neighbourhood-level price inequality metrics for each city."""
     required = ["city", "neighbourhood", "price"]
     missing = [col for col in required if col not in df.columns]
     if missing:
         raise KeyError(f"Missing columns for inequality analysis: {missing}")
 
-    work = _price_analysis_frame(df)
+    work = _price_analysis_frame(df, city_name=city_name)
     if work.empty:
         return pd.DataFrame(
             columns=[
@@ -357,6 +444,7 @@ def plot_top_expensive_neighbourhoods(
     inequality_df: pd.DataFrame,
     output_dir: Path | None = None,
     top_n: int = 15,
+    city_name: str | None = None,
 ) -> Path:
     """Plot top-N expensive neighbourhoods per city in side-by-side bar charts."""
     if inequality_df.empty:
@@ -365,10 +453,19 @@ def plot_top_expensive_neighbourhoods(
     out_dir = output_dir or PLOTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 8), sharex=False)
-    for ax, city in zip(axes, ["newyork", "chicago"]):
+    work = inequality_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"] == city_key].copy()
+
+    cities = sorted(work["city"].dropna().unique().tolist())
+    fig, axes = plt.subplots(1, len(cities), figsize=(8 * len(cities), 8), sharex=False)
+    if len(cities) == 1:
+        axes = [axes]
+
+    for ax, city in zip(axes, cities):
         city_df = (
-            inequality_df[inequality_df["city"] == city]
+            work[work["city"] == city]
             .sort_values("mean_price", ascending=False)
             .head(top_n)
             .sort_values("mean_price", ascending=True)
@@ -395,9 +492,10 @@ def plot_top_expensive_neighbourhoods(
 def plot_violin_price_by_room_type_city(
     df: pd.DataFrame,
     output_dir: Path | None = None,
+    city_name: str | None = None,
 ) -> Path:
     """Plot side-by-side violin distributions of price by room type for each city."""
-    work = _price_analysis_frame(df)
+    work = _price_analysis_frame(df, city_name=city_name)
     if work.empty:
         raise ValueError("No observed prices available for violin plotting.")
 
@@ -411,8 +509,12 @@ def plot_violin_price_by_room_type_city(
         "Hotel room",
     ]
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharey=True)
-    for ax, city in zip(axes, ["newyork", "chicago"]):
+    cities = sorted(work["city"].dropna().unique().tolist())
+    fig, axes = plt.subplots(1, len(cities), figsize=(8 * len(cities), 7), sharey=True)
+    if len(cities) == 1:
+        axes = [axes]
+
+    for ax, city in zip(axes, cities):
         city_df = work[work["city"] == city]
         sns.violinplot(
             data=city_df,
@@ -441,6 +543,7 @@ def plot_neighbourhood_mean_vs_cv(
     inequality_df: pd.DataFrame,
     output_dir: Path | None = None,
     annotate_top_n: int = 5,
+    city_name: str | None = None,
 ) -> Path:
     """Scatter mean_price vs CV by neighbourhood, sized by listing count and annotated."""
     if inequality_df.empty:
@@ -449,9 +552,18 @@ def plot_neighbourhood_mean_vs_cv(
     out_dir = output_dir or PLOTS_DIR
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fig, axes = plt.subplots(1, 2, figsize=(16, 7), sharex=False, sharey=False)
-    for ax, city in zip(axes, ["newyork", "chicago"]):
-        city_df = inequality_df[inequality_df["city"] == city].dropna(subset=["cv", "mean_price"]).copy()
+    work = inequality_df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"] == city_key].copy()
+
+    cities = sorted(work["city"].dropna().unique().tolist())
+    fig, axes = plt.subplots(1, len(cities), figsize=(8 * len(cities), 7), sharex=False, sharey=False)
+    if len(cities) == 1:
+        axes = [axes]
+
+    for ax, city in zip(axes, cities):
+        city_df = work[work["city"] == city].dropna(subset=["cv", "mean_price"]).copy()
         if city_df.empty:
             ax.set_title(f"{city.title()} (no valid data)")
             continue
@@ -495,9 +607,10 @@ def plot_neighbourhood_mean_vs_cv(
 def run_neighbourhood_inequality_analysis(
     df: pd.DataFrame,
     output_dir: Path | None = None,
+    city_name: str | None = None,
 ) -> dict[str, object]:
     """Run full neighbourhood inequality workflow and return metrics and plot paths."""
-    inequality_df = compute_neighbourhood_inequality_metrics(df)
+    inequality_df = compute_neighbourhood_inequality_metrics(df, city_name=city_name)
     if inequality_df.empty:
         raise ValueError("No valid data available for neighbourhood inequality analysis.")
 
@@ -505,12 +618,18 @@ def run_neighbourhood_inequality_analysis(
         inequality_df,
         output_dir=output_dir,
         top_n=15,
+        city_name=city_name,
     )
-    violin_path = plot_violin_price_by_room_type_city(df, output_dir=output_dir)
+    violin_path = plot_violin_price_by_room_type_city(
+        df,
+        output_dir=output_dir,
+        city_name=city_name,
+    )
     mean_cv_path = plot_neighbourhood_mean_vs_cv(
         inequality_df,
         output_dir=output_dir,
         annotate_top_n=5,
+        city_name=city_name,
     )
 
     return {
@@ -521,9 +640,17 @@ def run_neighbourhood_inequality_analysis(
     }
 
 
-def export_data_quality_table(df: pd.DataFrame) -> Path:
+def export_data_quality_table(
+    df: pd.DataFrame,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> Path:
     """Export observed vs imputed price quality summary by city and room type."""
     quality_df = df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        quality_df = quality_df[quality_df["city"].astype(str).str.lower() == city_key].copy()
+
     quality_df["price_imputed"] = quality_df["price_imputed"].fillna(False).astype(bool)
     quality_df["price_observed"] = ~quality_df["price_imputed"]
 
@@ -552,46 +679,66 @@ def export_data_quality_table(df: pd.DataFrame) -> Path:
     summary["observed_rate"] = summary["observed_rows"] / summary["rows_total"]
     summary["imputed_rate"] = summary["imputed_rows"] / summary["rows_total"]
 
-    out_path = TABLES_DIR / "data_quality_summary.csv"
+    out_dir = output_dir or TABLES_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "data_quality_summary.csv"
     summary = summary.sort_values(["city", "room_type"]).reset_index(drop=True)
     summary.to_csv(out_path, index=False)
     return out_path
 
 
-def run_eda() -> tuple[list[str], Path]:
+def run_eda(
+    city_name: str | None = None,
+    plots_output_dir: Path | None = None,
+    tables_output_dir: Path | None = None,
+) -> tuple[list[str], Path]:
     """Run Step 4 EDA plotting workflow and return insights and quality table path."""
-    PLOTS_DIR.mkdir(parents=True, exist_ok=True)
-    TABLES_DIR.mkdir(parents=True, exist_ok=True)
+    plots_dir = plots_output_dir or PLOTS_DIR
+    tables_dir = tables_output_dir or TABLES_DIR
+    plots_dir.mkdir(parents=True, exist_ok=True)
+    tables_dir.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
-    df = load_featured_data()
-    quality_table_path = export_data_quality_table(df)
+    df = load_featured_data(city_name=city_name)
+    quality_table_path = export_data_quality_table(
+        df,
+        city_name=city_name,
+        output_dir=tables_dir,
+    )
     insights = [
-        plot_price_distribution(df),
-        plot_price_by_room_type(df),
-        plot_correlation_heatmap(df),
-        plot_scatter_price_vs_availability(df),
-        plot_scatter_price_vs_reviews(df),
+        plot_price_distribution(df, city_name=city_name, output_dir=plots_dir),
+        plot_price_by_room_type(df, city_name=city_name, output_dir=plots_dir),
+        plot_correlation_heatmap(df, city_name=city_name, output_dir=plots_dir),
+        plot_scatter_price_vs_availability(df, city_name=city_name, output_dir=plots_dir),
+        plot_scatter_price_vs_reviews(df, city_name=city_name, output_dir=plots_dir),
         plot_roomtype_binned_smoothing(
             df,
             x_col="availability_365",
             x_label="Availability 365",
             out_name="price_vs_availability_roomtype_binned.png",
+            city_name=city_name,
+            output_dir=plots_dir,
         ),
         plot_roomtype_binned_smoothing(
             df,
             x_col="number_of_reviews",
             x_label="Number of Reviews",
             out_name="price_vs_reviews_roomtype_binned.png",
+            city_name=city_name,
+            output_dir=plots_dir,
         ),
     ]
 
     try:
-        inequality_results = run_neighbourhood_inequality_analysis(df)
+        inequality_results = run_neighbourhood_inequality_analysis(
+            df,
+            output_dir=plots_dir,
+            city_name=city_name,
+        )
         insights.append(
             "Insight: Generated neighbourhood inequality analysis plots and summary metrics."
         )
-        inequality_table_path = TABLES_DIR / "neighbourhood_inequality_summary.csv"
+        inequality_table_path = tables_dir / "neighbourhood_inequality_summary.csv"
         inequality_results["inequality_summary"].to_csv(inequality_table_path, index=False)
     except ValueError:
         insights.append(

@@ -8,4 +8,6 @@ matplotlib
 seaborn
 plotly
 folium
+xgboost
+shap
 jupyter

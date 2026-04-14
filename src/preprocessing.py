@@ -6,15 +6,12 @@ from typing import Any
 import geopandas as gpd
 import pandas as pd
 
+from src.config import CITY_FOLDERS
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
 CALENDAR_SAMPLE_ROWS = 200000
-
-CITY_FOLDERS = {
-    "newyork": "New York",
-    "chicago": "Chicago",
-}
 
 RELEVANT_COLUMNS = [
     "listing_id",
@@ -68,22 +65,44 @@ def load_geojson(file_path: Path) -> gpd.GeoDataFrame:
     return gpd.read_file(file_path)
 
 
+def _find_geojson_file(city_dir: Path) -> Path:
+    """Locate neighbourhood geojson across standard and alternate filenames."""
+    candidates = [
+        city_dir / "neighbourhoods.geojson",
+        city_dir / "neighbourhoods (1).geojson",
+    ]
+    for path in candidates:
+        if path.exists() and path.is_file():
+            return path
+
+    matches = list(city_dir.glob("neighbourhoods*.geojson"))
+    if matches:
+        return matches[0]
+
+    raise FileNotFoundError(f"Could not find neighbourhood geojson under {city_dir}")
+
+
 def load_city_data(
-    city_key: str,
+    city_key: str | None = None,
+    city_name: str | None = None,
     include_calendar: bool = False,
     calendar_sample_rows: int | None = None,
 ) -> dict[str, Any]:
     """Load all required raw data for a single city."""
-    normalized_city = city_key.lower().strip()
+    resolved_city = city_name if city_name is not None else city_key
+    if resolved_city is None:
+        raise ValueError("Either city_key or city_name must be provided.")
+
+    normalized_city = resolved_city.lower().strip().replace(" ", "")
     if normalized_city not in CITY_FOLDERS:
         raise ValueError(
-            f"Unknown city '{city_key}'. Valid options: {list(CITY_FOLDERS.keys())}"
+            f"Unknown city '{resolved_city}'. Valid options: {list(CITY_FOLDERS.keys())}"
         )
 
     city_dir = BASE_DIR / CITY_FOLDERS[normalized_city]
     listings_path = _find_dataset_file(city_dir, "listings")
     reviews_path = _find_dataset_file(city_dir, "reviews")
-    geojson_path = city_dir / "neighbourhoods.geojson"
+    geojson_path = _find_geojson_file(city_dir)
 
     city_data: dict[str, Any] = {
         "city": normalized_city,
@@ -105,7 +124,7 @@ def load_all_cities(
     include_calendar: bool = False,
     calendar_sample_rows: int | None = None,
 ) -> dict[str, dict[str, Any]]:
-    """Load city datasets for New York and Chicago using a common interface."""
+    """Load all configured city datasets using a common interface."""
     return {
         city_key: load_city_data(
             city_key,

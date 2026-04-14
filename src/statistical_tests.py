@@ -6,9 +6,10 @@ from pathlib import Path
 import pandas as pd
 from scipy.stats import ks_2samp, mannwhitneyu
 
+from src.config import TABLES_DIR, normalize_city_name
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-TABLES_DIR = BASE_DIR / "outputs" / "tables"
 
 
 def _interpret_pvalue(p_value: float, alpha: float) -> str:
@@ -24,7 +25,12 @@ def _price_series(df: pd.DataFrame) -> pd.Series:
     return series[series > 0].dropna()
 
 
-def run_statistical_comparison(df: pd.DataFrame, alpha: float = 0.05) -> pd.DataFrame:
+def run_statistical_comparison(
+    df: pd.DataFrame,
+    alpha: float = 0.05,
+    city_name: str | None = None,
+    output_dir: Path | None = None,
+) -> pd.DataFrame:
     """Run price distribution tests across cities and room types and return summary table."""
     required_cols = {"city", "room_type", "price"}
     missing = sorted(required_cols - set(df.columns))
@@ -33,39 +39,44 @@ def run_statistical_comparison(df: pd.DataFrame, alpha: float = 0.05) -> pd.Data
 
     work = df.copy()
     work["city"] = work["city"].astype(str).str.lower()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        work = work[work["city"] == city_key].copy()
+
     results: list[dict[str, object]] = []
 
-    ny = _price_series(work[work["city"] == "newyork"])
-    chicago = _price_series(work[work["city"] == "chicago"])
+    cities = sorted(work["city"].dropna().unique().tolist())
+    for city_1, city_2 in combinations(cities, 2):
+        prices_1 = _price_series(work[work["city"] == city_1])
+        prices_2 = _price_series(work[work["city"] == city_2])
+        if len(prices_1) == 0 or len(prices_2) == 0:
+            continue
 
-    if len(ny) == 0 or len(chicago) == 0:
-        raise ValueError("Both New York and Chicago require at least one valid positive price.")
+        mw_stat, mw_p = mannwhitneyu(prices_1, prices_2, alternative="two-sided")
+        results.append(
+            {
+                "test_name": f"Mann-Whitney U ({city_1} vs {city_2})",
+                "group_1": city_1,
+                "group_2": city_2,
+                "statistic": float(mw_stat),
+                "p_value": float(mw_p),
+                "interpretation": _interpret_pvalue(float(mw_p), alpha),
+            }
+        )
 
-    mw_stat, mw_p = mannwhitneyu(ny, chicago, alternative="two-sided")
-    results.append(
-        {
-            "test_name": "Mann-Whitney U (NY vs Chicago)",
-            "group_1": "newyork",
-            "group_2": "chicago",
-            "statistic": float(mw_stat),
-            "p_value": float(mw_p),
-            "interpretation": _interpret_pvalue(float(mw_p), alpha),
-        }
-    )
+        ks_stat, ks_p = ks_2samp(prices_1, prices_2, alternative="two-sided", method="auto")
+        results.append(
+            {
+                "test_name": f"Kolmogorov-Smirnov ({city_1} vs {city_2})",
+                "group_1": city_1,
+                "group_2": city_2,
+                "statistic": float(ks_stat),
+                "p_value": float(ks_p),
+                "interpretation": _interpret_pvalue(float(ks_p), alpha),
+            }
+        )
 
-    ks_stat, ks_p = ks_2samp(ny, chicago, alternative="two-sided", method="auto")
-    results.append(
-        {
-            "test_name": "Kolmogorov-Smirnov (NY vs Chicago)",
-            "group_1": "newyork",
-            "group_2": "chicago",
-            "statistic": float(ks_stat),
-            "p_value": float(ks_p),
-            "interpretation": _interpret_pvalue(float(ks_p), alpha),
-        }
-    )
-
-    for city in ["newyork", "chicago"]:
+    for city in cities:
         city_df = work[work["city"] == city].copy()
         room_types = [
             room
@@ -93,12 +104,12 @@ def run_statistical_comparison(df: pd.DataFrame, alpha: float = 0.05) -> pd.Data
 
     summary = pd.DataFrame(results)
     if summary.empty:
-        saved_path = save_statistical_summary(summary)
+        saved_path = save_statistical_summary(summary, output_dir=output_dir)
         print(f"[statistical_tests] Saved statistical summary to: {saved_path}")
         return summary
 
     summary = summary.sort_values(["test_name", "p_value"]).reset_index(drop=True)
-    saved_path = save_statistical_summary(summary)
+    saved_path = save_statistical_summary(summary, output_dir=output_dir)
     print(f"[statistical_tests] Saved statistical summary to: {saved_path}")
     return summary
 

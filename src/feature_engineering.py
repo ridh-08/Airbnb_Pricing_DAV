@@ -8,15 +8,11 @@ import numpy as np
 import pandas as pd
 import seaborn as sns
 
+from src.config import CITY_COLORS, PROCESSED_DIR, discover_processed_city_files, normalize_city_name
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-PROCESSED_DIR = BASE_DIR / "data" / "processed"
 PLOTS_DIR = BASE_DIR / "outputs" / "plots"
-
-CITY_COLORS = {
-    "newyork": "#FF5A5F",
-    "chicago": "#00A699",
-}
 
 
 def _count_amenities(value: object) -> int:
@@ -48,12 +44,24 @@ def _min_max_normalize(series: pd.Series) -> pd.Series:
 
 def add_demand_score(df: pd.DataFrame) -> pd.DataFrame:
     """Add composite demand_score based on normalized reviews and availability."""
+    featured = df.copy()
+
+    if "reviews_per_month" not in featured.columns:
+        reviews_total = pd.to_numeric(featured.get("reviews_total"), errors="coerce")
+        reviews_last_365d = pd.to_numeric(featured.get("reviews_last_365d"), errors="coerce")
+
+        if reviews_last_365d.notna().any():
+            featured["reviews_per_month"] = reviews_last_365d.fillna(0) / 12.0
+        elif reviews_total.notna().any():
+            featured["reviews_per_month"] = reviews_total.fillna(0) / 12.0
+        else:
+            featured["reviews_per_month"] = 0.0
+
     required = ["reviews_per_month", "number_of_reviews", "availability_365"]
-    missing = [col for col in required if col not in df.columns]
+    missing = [col for col in required if col not in featured.columns]
     if missing:
         raise KeyError(f"Missing columns required for demand_score: {missing}")
 
-    featured = df.copy()
     reviews_pm_norm = _min_max_normalize(featured["reviews_per_month"]).fillna(0.0)
     num_reviews_norm = _min_max_normalize(featured["number_of_reviews"]).fillna(0.0)
     availability_norm = _min_max_normalize(featured["availability_365"]).fillna(0.0)
@@ -70,6 +78,7 @@ def plot_demand_score_vs_price(
     df: pd.DataFrame,
     output_dir: Path | None = None,
     cluster_col: str = "cluster_kmeans",
+    city_name: str | None = None,
 ) -> Path:
     """Plot demand_score vs price faceted by city and colored by cluster label."""
     if cluster_col not in df.columns:
@@ -85,6 +94,10 @@ def plot_demand_score_vs_price(
         raise KeyError(f"Missing columns for demand_score plot: {missing}")
 
     plot_df = df.copy()
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        plot_df = plot_df[plot_df["city"].astype(str).str.lower() == city_key].copy()
+
     plot_df["price"] = pd.to_numeric(plot_df["price"], errors="coerce")
     plot_df["demand_score"] = pd.to_numeric(plot_df["demand_score"], errors="coerce")
     plot_df = plot_df.dropna(subset=["price", "demand_score", cluster_col, "city"])
@@ -159,12 +172,17 @@ def add_engineered_features(df: pd.DataFrame) -> pd.DataFrame:
     return featured
 
 
-def run_feature_engineering() -> list[Path]:
+def run_feature_engineering(city_name: str | None = None) -> list[Path]:
     """Build feature-enriched datasets from analysis-ready city files."""
-    city_files = {
-        "newyork": PROCESSED_DIR / "newyork_analysis_ready.csv",
-        "chicago": PROCESSED_DIR / "chicago_analysis_ready.csv",
-    }
+    city_files = discover_processed_city_files("analysis_ready")
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        city_files = {k: v for k, v in city_files.items() if k == city_key}
+
+    if not city_files:
+        raise FileNotFoundError(
+            "No analysis-ready files found. Run preprocessing first."
+        )
 
     saved_paths: list[Path] = []
     for city_key, path in city_files.items():
