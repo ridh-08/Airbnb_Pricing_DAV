@@ -12,7 +12,11 @@ import statsmodels.formula.api as smf
 from scipy.stats import kruskal, mannwhitneyu
 
 from src.config import CITY_COLORS, OUTPUTS_DIR
-from src.regression_analysis import compare_model_performance, train_xgboost_model
+from src.regression_analysis import (
+    compare_model_performance,
+    plot_xgboost_actual_vs_predicted,
+    train_xgboost_model,
+)
 
 
 MULTI_CITY_OUTPUT_DIR = OUTPUTS_DIR / "multi_city"
@@ -330,6 +334,7 @@ def run_multi_city_analysis(
 
     xgboost_metrics_df = pd.DataFrame()
     xgboost_r2_plot_path: Path | None = None
+    xgboost_diag_plot_path: Path | None = None
     xgboost_city_models: dict[str, Any] = {}
 
     for city_name, city_df in city_dataframes.items():
@@ -346,6 +351,10 @@ def run_multi_city_analysis(
             output_dir=plots_dir,
         )
         xgboost_r2_plot_path = plots_dir / "model_r2_comparison_by_city.png"
+        xgboost_diag_plot_path = plot_xgboost_actual_vs_predicted(
+            xgboost_city_models,
+            output_dir=plots_dir,
+        )
 
     all_tables = {
         "pooled_fixed_effects": regression_tables["pooled_fixed_effects"],
@@ -354,6 +363,26 @@ def run_multi_city_analysis(
     }
     if not xgboost_metrics_df.empty:
         all_tables["xgboost_city_metrics"] = xgboost_metrics_df
+
+        tuning_rows: list[dict[str, Any]] = []
+        for city_key, payload in xgboost_city_models.items():
+            params = payload.get("best_params", {})
+            tuning_rows.append(
+                {
+                    "city": city_key,
+                    "target_transform": payload.get("target_transform", "none"),
+                    "n_rows": payload.get("n_rows"),
+                    "n_features": len(payload.get("feature_columns", [])),
+                    "max_depth": params.get("max_depth"),
+                    "learning_rate": params.get("learning_rate"),
+                    "n_estimators": params.get("n_estimators"),
+                    "subsample": params.get("subsample"),
+                    "colsample_bytree": params.get("colsample_bytree"),
+                    "val_r2": payload.get("metrics", {}).get("tuned_val_r2"),
+                }
+            )
+
+        all_tables["xgboost_tuning_summary"] = pd.DataFrame(tuning_rows)
 
     table_paths: dict[str, Path] = {}
     for name, table in all_tables.items():
@@ -369,4 +398,5 @@ def run_multi_city_analysis(
         "tables": table_paths,
         "workbook": workbook_path,
         "xgboost_r2_plot": xgboost_r2_plot_path,
+        "xgboost_diagnostic_plot": xgboost_diag_plot_path,
     }

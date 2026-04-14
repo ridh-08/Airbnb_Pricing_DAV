@@ -380,11 +380,21 @@ def clean_calendar(
     cleaned["date"] = pd.to_datetime(cleaned["date"], errors="coerce")
     cleaned["price"] = _clean_price_column(cleaned["price"])
 
+    observed_mask = cleaned["price"].notna()
+
     # Calendar data can have sparse prices; use listing-level and global fallbacks.
     cleaned["price"] = cleaned["price"].fillna(
         cleaned["listing_id"].map(listing_price_fallback)
     )
+    listing_fill_mask = (~observed_mask) & cleaned["price"].notna()
+
+    missing_after_listing = cleaned["price"].isna()
     cleaned["price"] = cleaned["price"].fillna(global_price_fallback)
+    global_fill_mask = missing_after_listing & cleaned["price"].notna()
+
+    cleaned["price_source"] = "observed"
+    cleaned.loc[listing_fill_mask, "price_source"] = "listing_fallback"
+    cleaned.loc[global_fill_mask, "price_source"] = "global_fallback"
 
     cleaned["available"] = (
         cleaned["available"]
@@ -403,6 +413,7 @@ def clean_calendar(
         "date",
         "available",
         "price",
+        "price_source",
         "minimum_nights",
         "maximum_nights",
     ]

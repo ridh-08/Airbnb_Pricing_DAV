@@ -186,6 +186,24 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
 .ch-tall{width:100%;height:380px}
 .ch-short{width:100%;height:240px}
 
+/* ── PREDICTOR ─────────────────────────────────────────── */
+.pred-grid{display:grid;grid-template-columns:1.2fr .8fr;gap:20px}
+@media(max-width:900px){.pred-grid{grid-template-columns:1fr}}
+.pred-controls{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:600px){.pred-controls{grid-template-columns:1fr}}
+.pred-field{background:var(--card2);border:1px solid var(--b1);border-radius:var(--rs);padding:12px}
+.pred-label{font-family:var(--fm);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
+.pred-value{font-family:var(--fh);font-size:18px;font-weight:700;color:var(--active);margin-top:4px}
+.pred-range{width:100%;accent-color:var(--active)}
+.pred-select{width:100%;background:#0e1625;color:var(--text);border:1px solid var(--b1);border-radius:8px;padding:8px;font-family:var(--fm);font-size:11px}
+.pred-btn{margin-top:4px;padding:10px 14px;border-radius:10px;border:1px solid var(--active);background:var(--active-08);color:var(--active);font-family:var(--fm);font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.2s}
+.pred-btn:hover{background:var(--active-20)}
+.pred-result{background:var(--card2);border:1px solid var(--b1);border-radius:var(--r);padding:18px}
+.pred-title{font-family:var(--fh);font-size:14px;font-weight:700;margin-bottom:10px}
+.pred-price{font-family:var(--fh);font-size:42px;font-weight:800;line-height:1;color:var(--active);letter-spacing:-.03em}
+.pred-band{font-family:var(--fm);font-size:11px;color:var(--muted);margin-top:10px}
+.pred-meta{font-family:var(--fm);font-size:10px;color:var(--muted);margin-top:12px;display:grid;gap:6px}
+
 /* ── R² RANKED LIST ────────────────────────────────────── */
 .r2-list{display:flex;flex-direction:column;gap:14px;padding-top:6px}
 .r2-item{display:grid;grid-template-columns:100px 1fr 48px;align-items:center;gap:12px;
@@ -314,6 +332,8 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <nav id="sidenav">
   <div class="sn-dot active" data-sec="hero"     data-label="Overview"></div>
   <div class="sn-dot"        data-sec="profile"  data-label="City Profile"></div>
+  <div class="sn-dot"        data-sec="predict"  data-label="Predictor"></div>
+  <div class="sn-dot"        data-sec="progress" data-label="Model Journey"></div>
   <div class="sn-dot"        data-sec="compare"  data-label="Comparison"></div>
   <div class="sn-dot"        data-sec="shap"     data-label="Pricing Drivers"></div>
   <div class="sn-dot"        data-sec="cluster"  data-label="Clusters"></div>
@@ -398,11 +418,99 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
   </div>
 </section>
 
+<!-- ── XGBOOST PREDICTOR ─────────────────────────────── -->
+<section id="predict">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">02</span>
+      <div><h2>XGBoost Price Simulator</h2>
+      <div class="sec-sub">Interactive what-if predictions using city-level XGBoost models trained on listing features</div></div>
+    </div>
+    <div class="pred-grid reveal">
+      <div class="card">
+        <div class="card-title">Scenario Controls</div>
+        <div class="card-desc">Tune listing characteristics to estimate expected nightly price</div>
+        <div class="pred-controls">
+          <div class="pred-field">
+            <div class="pred-label">Accommodates</div>
+            <input id="predAccommodates" class="pred-range" type="range" step="1" />
+            <div class="pred-value" id="predAccommodatesVal">—</div>
+          </div>
+          <div class="pred-field">
+            <div class="pred-label">Amenities Count</div>
+            <input id="predAmenities" class="pred-range" type="range" step="1" />
+            <div class="pred-value" id="predAmenitiesVal">—</div>
+          </div>
+          <div class="pred-field">
+            <div class="pred-label">Availability (Days / Year)</div>
+            <input id="predAvailability" class="pred-range" type="range" step="1" />
+            <div class="pred-value" id="predAvailabilityVal">—</div>
+          </div>
+          <div class="pred-field">
+            <div class="pred-label">Review Density</div>
+            <input id="predReviewDensity" class="pred-range" type="range" step="0.05" />
+            <div class="pred-value" id="predReviewDensityVal">—</div>
+          </div>
+          <div class="pred-field" style="grid-column:1/-1">
+            <div class="pred-label">Neighbourhood</div>
+            <select id="predNeighbourhood" class="pred-select"></select>
+          </div>
+          <div class="pred-field" style="grid-column:1/-1">
+            <div class="pred-label">Sensitivity Feature</div>
+            <select id="predSensitivityFeature" class="pred-select">
+              <option value="accommodates">Accommodates</option>
+              <option value="amenities_count">Amenities Count</option>
+              <option value="availability_365">Availability (Days/Year)</option>
+              <option value="review_density">Review Density</option>
+            </select>
+          </div>
+        </div>
+        <button id="predRun" class="pred-btn">Run Prediction</button>
+      </div>
+      <div class="pred-result">
+        <div class="pred-title">Predicted Nightly Price</div>
+        <div class="pred-price" id="predPrice">$—</div>
+        <div class="pred-band" id="predBand">Prediction interval: —</div>
+        <div class="pred-meta">
+          <div id="predMetaCity">City model: —</div>
+          <div id="predMetaNeigh">Neighbourhood: —</div>
+          <div id="predMetaRmse">Model uncertainty (RMSE): —</div>
+          <div id="predMetaSample">Training sample: —</div>
+        </div>
+        <div class="ch-short" id="chartPredSensitivity" style="margin-top:14px"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ── MODEL PROGRESSION ─────────────────────────────── -->
+<section id="progress">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">03</span>
+      <div><h2>Model Progression</h2>
+      <div class="sec-sub">Transparent view of performance evolution from baseline to enhanced grouped-split modeling</div></div>
+    </div>
+    <div class="g2 reveal">
+      <div class="card">
+        <div class="card-title">R2 Progression by Stage</div>
+        <div class="card-desc">Stage 0: baseline saved metrics · Stage 1: enhanced random split · Stage 2: grouped split by listing_id</div>
+        <div class="ch" id="chartProgressionR2"></div>
+      </div>
+      <div class="card reveal-d1">
+        <div class="card-title">Progression Table</div>
+        <div class="card-desc">Per-city delta from baseline retained for auditability in final report</div>
+        <div style="overflow-x:auto"><table id="progressTable" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── CROSS-CITY COMPARISON ─────────────────────────── -->
 <section id="compare">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">02</span>
+      <span class="sec-num">04</span>
       <div><h2>Cross-City Comparison</h2>
       <div class="sec-sub">Click a city above — selected city is spotlit across all charts</div></div>
     </div>
@@ -437,7 +545,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="shap">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">03</span>
+      <span class="sec-num">05</span>
       <div><h2>Pricing Drivers</h2>
       <div class="sec-sub">SHAP feature importance · rank 1 = strongest driver · 6 cities × top-5 features</div></div>
     </div>
@@ -465,7 +573,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="cluster">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">04</span>
+      <span class="sec-num">06</span>
       <div><h2>Listing Clusters &amp; Host Archetypes</h2>
       <div class="sec-sub">4 pooled K-Means clusters · 3 host strategy archetypes</div></div>
     </div>
@@ -489,7 +597,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="spatial">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">05</span>
+      <span class="sec-num">07</span>
       <div><h2>Spatial Analysis</h2>
       <div class="sec-sub">Neighbourhood price leaders · Moran's I spatial autocorrelation · interactive maps</div></div>
     </div>
@@ -530,7 +638,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="calendar">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">06</span>
+      <span class="sec-num">08</span>
       <div><h2>Calendar &amp; Temporal Trends</h2>
       <div class="sec-sub">Forward-looking availability rates · seasonal demand pressure</div></div>
     </div>
@@ -563,7 +671,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="stats">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">07</span>
+      <span class="sec-num">09</span>
       <div><h2>Statistical Testing</h2>
       <div class="sec-sub">Mann-Whitney U pairwise tests · Benjamini-Hochberg correction · all 15 city pairs</div></div>
     </div>
@@ -611,6 +719,7 @@ const CFG = {responsive:true,displayModeBar:false};
 
 let selectedCity = 'newyork';
 let DATA = null;
+let PRED_META = {};
 
 // ── CURSOR ───────────────────────────────────────────────────────────
 const cur = document.getElementById('cursor');
@@ -651,7 +760,7 @@ const obs=new IntersectionObserver(entries=>{
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
 // ── SECTION NAV ──────────────────────────────────────────────────────
-const secs=['hero','profile','compare','shap','cluster','spatial','calendar','stats'];
+const secs=['hero','profile','predict','progress','compare','shap','cluster','spatial','calendar','stats'];
 const secObs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{
     if(e.isIntersecting){
@@ -686,6 +795,8 @@ function setAccent(city){
 fetch('/api/data').then(r=>r.json()).then(d=>{
   DATA=d;
   buildCityCards();
+  buildPredictorSection();
+  buildProgressionSection();
   buildCompareCharts();
   buildSHAPCharts();
   buildClusterCharts();
@@ -747,6 +858,9 @@ function selectCity(city,init=false){
 
   // maps
   loadMaps(city);
+
+  // predictor controls
+  setupPredictorForCity(city);
 }
 
 // ── CITY SELECTOR CARDS ──────────────────────────────────────────────
@@ -769,6 +883,229 @@ function buildCityCards(){
     card.addEventListener('click',()=>selectCity(city));
     row.appendChild(card);
   });
+}
+
+// ── PREDICTOR ───────────────────────────────────────────────────────
+function buildPredictorSection(){
+  fetch('/api/predict/meta').then(r=>r.json()).then(meta=>{
+    PRED_META=meta||{};
+
+    ['predAccommodates','predAmenities','predAvailability','predReviewDensity'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el){
+        el.addEventListener('input',updatePredictorLabels);
+      }
+    });
+
+    const runBtn=document.getElementById('predRun');
+    if(runBtn){
+      runBtn.addEventListener('click',runPrediction);
+    }
+
+    const neighSel=document.getElementById('predNeighbourhood');
+    if(neighSel){
+      neighSel.addEventListener('change',runPrediction);
+    }
+
+    const sensSel=document.getElementById('predSensitivityFeature');
+    if(sensSel){
+      sensSel.addEventListener('change',()=>{
+        if(PRED_META[selectedCity]){
+          renderPredictionSensitivity(getPredictorPayload());
+        }
+      });
+    }
+
+    setupPredictorForCity(selectedCity);
+  }).catch(()=>{
+    document.getElementById('predPrice').textContent='$—';
+    document.getElementById('predBand').textContent='Prediction unavailable (city model metadata not loaded).';
+  });
+}
+
+function setupPredictorForCity(city){
+  const meta=PRED_META[city];
+  if(!meta) return;
+
+  const setRange=(id,key,step='1')=>{
+    const el=document.getElementById(id);
+    const r=meta.ranges[key];
+    if(!el||!r) return;
+    el.min=Math.floor(r.min);
+    el.max=Math.ceil(r.max);
+    el.step=step;
+    el.value=r.default;
+  };
+
+  setRange('predAccommodates','accommodates','1');
+  setRange('predAmenities','amenities_count','1');
+  setRange('predAvailability','availability_365','1');
+  setRange('predReviewDensity','review_density','0.05');
+
+  const sel=document.getElementById('predNeighbourhood');
+  if(sel){
+    const opts=(meta.top_neighbourhoods||[]).map(n=>`<option value="${n}">${n}</option>`).join('');
+    sel.innerHTML=opts+'<option value="OTHER">OTHER</option>';
+    sel.value=meta.default_neighbourhood||'OTHER';
+  }
+
+  const sens=document.getElementById('predSensitivityFeature');
+  if(sens && !sens.value){
+    sens.value='accommodates';
+  }
+
+  updatePredictorLabels();
+  runPrediction();
+}
+
+function updatePredictorLabels(){
+  const a=document.getElementById('predAccommodates');
+  const m=document.getElementById('predAmenities');
+  const av=document.getElementById('predAvailability');
+  const rd=document.getElementById('predReviewDensity');
+  if(!a||!m||!av||!rd) return;
+
+  document.getElementById('predAccommodatesVal').textContent=Math.round(Number(a.value||0));
+  document.getElementById('predAmenitiesVal').textContent=Math.round(Number(m.value||0));
+  document.getElementById('predAvailabilityVal').textContent=Math.round(Number(av.value||0));
+  document.getElementById('predReviewDensityVal').textContent=Number(rd.value||0).toFixed(2);
+}
+
+function getPredictorPayload(){
+  return {
+    accommodates:Number(document.getElementById('predAccommodates').value),
+    amenities_count:Number(document.getElementById('predAmenities').value),
+    availability_365:Number(document.getElementById('predAvailability').value),
+    review_density:Number(document.getElementById('predReviewDensity').value),
+    neighbourhood:document.getElementById('predNeighbourhood').value,
+  };
+}
+
+function runPrediction(){
+  if(!PRED_META[selectedCity]) return;
+
+  const payload=getPredictorPayload();
+
+  fetch(`/api/predict/${selectedCity}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload),
+  }).then(r=>r.json()).then(res=>{
+    if(res.error){
+      document.getElementById('predPrice').textContent='$—';
+      document.getElementById('predBand').textContent='Prediction unavailable for this city.';
+      return;
+    }
+
+    document.getElementById('predPrice').textContent=`$${Math.round(res.prediction).toLocaleString()}`;
+    document.getElementById('predBand').textContent=`Prediction interval: $${Math.round(res.band_low).toLocaleString()} - $${Math.round(res.band_high).toLocaleString()}`;
+    document.getElementById('predMetaCity').textContent=`City model: ${CL[selectedCity]} · XGBoost`;
+    document.getElementById('predMetaNeigh').textContent=`Neighbourhood: ${res.used_neighbourhood}`;
+    document.getElementById('predMetaRmse').textContent=`Model uncertainty (RMSE): $${Math.round(res.rmse).toLocaleString()}`;
+    document.getElementById('predMetaSample').textContent=`Training sample: ${Number(res.sample_size).toLocaleString()} listings`;
+    renderPredictionSensitivity(payload);
+  }).catch(()=>{
+    document.getElementById('predPrice').textContent='$—';
+    document.getElementById('predBand').textContent='Prediction request failed.';
+    Plotly.purge('chartPredSensitivity');
+  });
+}
+
+function renderPredictionSensitivity(basePayload){
+  const sel=document.getElementById('predSensitivityFeature');
+  const feature=(sel && sel.value) ? sel.value : 'accommodates';
+  const labels={
+    accommodates:'Accommodates',
+    amenities_count:'Amenities Count',
+    availability_365:'Availability (days/year)',
+    review_density:'Review Density',
+  };
+
+  const payload={...basePayload,feature,points:14};
+  fetch(`/api/predict/sweep/${selectedCity}`,{
+    method:'POST',
+    headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(payload),
+  }).then(r=>r.json()).then(res=>{
+    if(res.error || !res.x || !res.y){
+      Plotly.purge('chartPredSensitivity');
+      return;
+    }
+
+    Plotly.newPlot('chartPredSensitivity',[{
+      type:'scatter',
+      mode:'lines+markers',
+      x:res.x,
+      y:res.y,
+      line:{color:CC[selectedCity],width:3},
+      marker:{color:CC[selectedCity],size:6},
+      hovertemplate:'%{x:.2f} → $%{y:,.0f}<extra></extra>',
+    }],{
+      ...BASE,
+      margin:{t:26,r:8,b:42,l:56},
+      title:{text:`Sensitivity: ${labels[feature]||feature}`,font:{size:11,color:'#9bb0ca',family:"'IBM Plex Mono',monospace"}},
+      xaxis:{...BASE.xaxis,title:{text:labels[feature]||feature,font:{size:10,color:'#6060a0'}}},
+      yaxis:{...BASE.yaxis,title:{text:'Predicted Price ($)',font:{size:10,color:'#6060a0'}}},
+    },CFG);
+  }).catch(()=>{
+    Plotly.purge('chartPredSensitivity');
+  });
+}
+
+// ── MODEL PROGRESSION ───────────────────────────────────────────────
+function buildProgressionSection(){
+  const rows=(DATA.xgb_progression||[]).slice();
+  if(!rows.length){
+    const t=document.getElementById('progressTable');
+    if(t){ t.innerHTML='<tr><td style="padding:10px;color:var(--muted)">Progression data not found.</td></tr>'; }
+    return;
+  }
+
+  const cityOrder=CO.filter(c=>rows.some(r=>String(r.city).toLowerCase()===c));
+  const ordered=cityOrder.map(c=>rows.find(r=>String(r.city).toLowerCase()===c)).filter(Boolean);
+
+  const stage0=ordered.map(r=>Number(r.stage0_old_r2||0));
+  const stage1=ordered.map(r=>Number(r.stage1_random_r2||0));
+  const stage2=ordered.map(r=>Number(r.stage2_grouped_r2||0));
+
+  Plotly.newPlot('chartProgressionR2',[
+    {type:'scatter',mode:'lines+markers',name:'Stage 0 (baseline)',x:cityOrder.map(c=>CL[c]),y:stage0,line:{width:2,color:'#8fa0b6'},marker:{size:7,color:'#8fa0b6'}},
+    {type:'scatter',mode:'lines+markers',name:'Stage 1 (enhanced random)',x:cityOrder.map(c=>CL[c]),y:stage1,line:{width:2,color:'#ffb703'},marker:{size:7,color:'#ffb703'}},
+    {type:'scatter',mode:'lines+markers',name:'Stage 2 (grouped split)',x:cityOrder.map(c=>CL[c]),y:stage2,line:{width:3,color:'#4cc9f0'},marker:{size:8,color:'#4cc9f0'}},
+  ],{
+    ...BASE,
+    margin:{t:8,r:8,b:55,l:50},
+    yaxis:{...BASE.yaxis,title:{text:'R2',font:{size:10,color:'#6060a0'}}},
+    xaxis:{...BASE.xaxis,tickangle:-20},
+    legend:{font:{size:10,color:'#6060a0'},bgcolor:'rgba(0,0,0,0)',orientation:'h',y:-0.26,x:0},
+    showlegend:true,
+  },CFG);
+
+  const tbl=document.getElementById('progressTable');
+  if(!tbl) return;
+  tbl.innerHTML=`<thead style="font-family:var(--fm);font-size:9px;letter-spacing:.12em;color:var(--muted)">
+    <tr>
+      <th style="padding:8px 10px;text-align:left;border-bottom:1px solid var(--b2);text-transform:uppercase">City</th>
+      <th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--b2);text-transform:uppercase">Stage 0</th>
+      <th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--b2);text-transform:uppercase">Stage 1</th>
+      <th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--b2);text-transform:uppercase">Stage 2</th>
+      <th style="padding:8px 10px;text-align:right;border-bottom:1px solid var(--b2);text-transform:uppercase">Delta S2-S0</th>
+    </tr>
+  </thead>
+  <tbody>
+    ${ordered.map(r=>{
+      const city=String(r.city).toLowerCase();
+      const d20=Number(r.delta_old_to_stage2||0);
+      const dColor=d20>=0 ? '#4ade80' : '#ff7a59';
+      return `<tr style="border-bottom:1px solid var(--b1)">
+        <td style="padding:9px 10px;color:${CC[city]||'var(--text)'};font-family:var(--fm);font-size:11px">${CL[city]||city}</td>
+        <td style="padding:9px 10px;text-align:right;font-family:var(--fm);font-size:11px">${Number(r.stage0_old_r2||0).toFixed(3)}</td>
+        <td style="padding:9px 10px;text-align:right;font-family:var(--fm);font-size:11px">${Number(r.stage1_random_r2||0).toFixed(3)}</td>
+        <td style="padding:9px 10px;text-align:right;font-family:var(--fm);font-size:11px">${Number(r.stage2_grouped_r2||0).toFixed(3)}</td>
+        <td style="padding:9px 10px;text-align:right;font-family:var(--fm);font-size:11px;color:${dColor}">${d20>=0?'+':''}${d20.toFixed(3)}</td>
+      </tr>`;
+    }).join('')}
+  </tbody>`;
 }
 
 // ── SHAP BARS ────────────────────────────────────────────────────────

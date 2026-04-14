@@ -10,8 +10,8 @@ import pandas as pd
 import seaborn as sns
 import statsmodels.api as sm
 from sklearn.ensemble import RandomForestRegressor
-from sklearn.metrics import mean_squared_error, r2_score
-from sklearn.model_selection import train_test_split
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.model_selection import GroupShuffleSplit, train_test_split
 
 from src.config import CITY_COLORS, PLOTS_DIR, normalize_city_name
 
@@ -26,20 +26,103 @@ BASE_FEATURES = [
     "minimum_nights",
 ]
 
+XGB_NUMERIC_CANDIDATES = [
+    "accommodates",
+    "amenities_count",
+    "availability_365",
+    "review_density",
+    "reviews_per_month",
+    "minimum_nights",
+    "number_of_reviews",
+    "demand_score",
+    "latitude",
+    "longitude",
+]
+
+
+def _prepare_xgboost_design_matrix(
+    df: pd.DataFrame,
+    target: str,
+    top_n_neighbourhoods: int = 30,
+) -> tuple[pd.DataFrame, pd.Series, dict[str, Any]]:
+    """Prepare robust XGBoost design matrix with numeric and categorical features.
+
+    Uses a log1p-transformed target for stability and trims rare neighbourhood labels.
+    """
+    if target not in df.columns:
+        raise KeyError(f"Target column '{target}' not found in dataframe.")
+
+    work = df.copy()
+    work[target] = pd.to_numeric(work[target], errors="coerce")
+    work = work[work[target] > 0].copy()
+
+    # Keep model less sensitive to extreme tail values while preserving market structure.
+    if len(work) >= 500:
+        lower = float(work[target].quantile(0.01))
+        upper = float(work[target].quantile(0.995))
+        work = work[(work[target] >= lower) & (work[target] <= upper)].copy()
+
+    numeric_cols = [c for c in XGB_NUMERIC_CANDIDATES if c in work.columns]
+    if not numeric_cols:
+        raise KeyError("No numeric predictors available for XGBoost model training.")
+
+    for col in numeric_cols:
+        work[col] = pd.to_numeric(work[col], errors="coerce")
+
+    required = numeric_cols + [target]
+    work = work.dropna(subset=required)
+    if work.empty:
+        raise ValueError("No valid rows available after XGBoost feature preparation.")
+
+    work = work.reset_index(drop=True)
+
+    categorical_parts: list[pd.DataFrame] = []
+    if "room_type" in work.columns:
+        room = work["room_type"].astype(str).replace({"nan": "unknown"}).fillna("unknown")
+        categorical_parts.append(pd.get_dummies(room, prefix="room", drop_first=False))
+
+    if "neighbourhood" in work.columns:
+        neigh = work["neighbourhood"].astype(str).replace({"nan": "OTHER"}).fillna("OTHER")
+        top_neigh = neigh.value_counts().head(top_n_neighbourhoods).index.tolist()
+        neigh = neigh.where(neigh.isin(top_neigh), other="OTHER")
+        categorical_parts.append(pd.get_dummies(neigh, prefix="neigh", drop_first=False))
+
+    X_num = work[numeric_cols].astype(float)
+    X = X_num
+    if categorical_parts:
+        X = pd.concat([X_num] + categorical_parts, axis=1).astype(float)
+
+    # De-duplicate columns in rare cases where input schema creates collisions.
+    X = X.loc[:, ~X.columns.duplicated()].copy()
+
+    y_price = work[target].astype(float)
+    y_log = np.log1p(y_price)
+
+    groups_aligned: pd.Series | None = None
+    if "listing_id" in work.columns:
+        groups_aligned = pd.to_numeric(work["listing_id"], errors="coerce").reset_index(drop=True)
+
+    meta = {
+        "numeric_features": numeric_cols,
+        "feature_columns": X.columns.tolist(),
+        "n_rows": int(len(X)),
+        "groups": groups_aligned,
+    }
+    return X, y_log, meta
+
 
 def train_xgboost_model(
     df: pd.DataFrame,
     target: str = "price",
     random_state: int = 42,
 ) -> dict[str, Any]:
-    """Train an XGBoost regressor using selected listing features.
+    """Train an enhanced XGBoost regressor with city-specific tuning.
 
-    Steps implemented:
-    - Uses features: accommodates, amenities_count, availability_365, review_density,
-      neighbourhood (one-hot encoded).
-    - Applies an 80-20 train-test split.
-    - Trains XGBoost regressor with deterministic random_state.
-    - Returns model, predictions, and evaluation metrics (R2, RMSE).
+    Model upgrades:
+    - Uses rich numeric + categorical features (room type and neighbourhood buckets).
+    - Applies log1p target transformation for more stable price modeling.
+    - Performs lightweight hyperparameter search on a validation split.
+    - Reports metrics in original price units (R2, RMSE, MAE, MAPE).
     """
     try:
         xgboost_module = importlib.import_module("xgboost")
@@ -49,57 +132,131 @@ def train_xgboost_model(
             "xgboost is required for train_xgboost_model(). Install with: pip install xgboost"
         ) from exc
 
-    required = ["accommodates", "amenities_count", "availability_365", "review_density", "neighbourhood", target]
-    missing = [col for col in required if col not in df.columns]
-    if missing:
-        raise KeyError(f"Missing required columns for XGBoost training: {missing}")
+    X, y_log, meta = _prepare_xgboost_design_matrix(df, target=target)
 
-    work = df.copy()
-    numeric_cols = ["accommodates", "amenities_count", "availability_365", "review_density", target]
-    for col in numeric_cols:
-        work[col] = pd.to_numeric(work[col], errors="coerce")
+    groups: pd.Series | None = meta.get("groups")
 
-    work["neighbourhood"] = work["neighbourhood"].astype(str)
-    work = work.dropna(subset=required)
+    # If listing_id is available, split by listing to reduce leakage from repeated rows.
+    split_strategy = "random"
+    if groups is not None and groups.notna().sum() >= 200 and groups.nunique() >= 100:
+        valid_mask = groups.notna()
+        X = X.loc[valid_mask].reset_index(drop=True)
+        y_log = y_log.loc[valid_mask].reset_index(drop=True)
+        groups = groups.loc[valid_mask].reset_index(drop=True)
 
-    if work.empty:
-        raise ValueError("No valid rows available after cleaning for XGBoost training.")
+        gss_test = GroupShuffleSplit(n_splits=1, test_size=0.2, random_state=random_state)
+        train_idx, test_idx = next(gss_test.split(X, y_log, groups=groups))
 
-    X_num = work[["accommodates", "amenities_count", "availability_365", "review_density"]].copy()
-    X_neigh = pd.get_dummies(work["neighbourhood"], prefix="neigh", drop_first=True)
-    X = pd.concat([X_num, X_neigh], axis=1).astype(float)
-    y = work[target].astype(float)
+        X_train_full = X.iloc[train_idx].reset_index(drop=True)
+        y_train_full = y_log.iloc[train_idx].reset_index(drop=True)
+        X_test = X.iloc[test_idx].reset_index(drop=True)
+        y_test = y_log.iloc[test_idx].reset_index(drop=True)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        X,
-        y,
-        test_size=0.2,
-        random_state=random_state,
-    )
+        groups_train = groups.iloc[train_idx].reset_index(drop=True)
+        gss_val = GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=random_state)
+        tr_idx, val_idx = next(gss_val.split(X_train_full, y_train_full, groups=groups_train))
 
+        X_train = X_train_full.iloc[tr_idx].reset_index(drop=True)
+        y_train = y_train_full.iloc[tr_idx].reset_index(drop=True)
+        X_val = X_train_full.iloc[val_idx].reset_index(drop=True)
+        y_val = y_train_full.iloc[val_idx].reset_index(drop=True)
+        split_strategy = "grouped_listing_id"
+    else:
+        X_train_full, X_test, y_train_full, y_test = train_test_split(
+            X,
+            y_log,
+            test_size=0.2,
+            random_state=random_state,
+        )
+
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_train_full,
+            y_train_full,
+            test_size=0.25,
+            random_state=random_state,
+        )
+
+    if len(X_train_full) < 100 or len(X_test) < 20 or len(X_val) < 20:
+        raise ValueError("Not enough rows for stable train/test split in XGBoost training.")
+
+    param_grid = [
+        {"max_depth": 4, "learning_rate": 0.05, "n_estimators": 300, "subsample": 0.85, "colsample_bytree": 0.85},
+        {"max_depth": 5, "learning_rate": 0.05, "n_estimators": 350, "subsample": 0.90, "colsample_bytree": 0.90},
+        {"max_depth": 6, "learning_rate": 0.04, "n_estimators": 450, "subsample": 0.90, "colsample_bytree": 0.90},
+        {"max_depth": 5, "learning_rate": 0.03, "n_estimators": 550, "subsample": 0.95, "colsample_bytree": 0.85},
+        {"max_depth": 7, "learning_rate": 0.04, "n_estimators": 380, "subsample": 0.85, "colsample_bytree": 0.95},
+    ]
+
+    best_score = -np.inf
+    best_params = param_grid[0]
+    best_model: Any = None
+
+    for params in param_grid:
+        model = XGBRegressor(
+            objective="reg:squarederror",
+            random_state=random_state,
+            n_jobs=-1,
+            min_child_weight=2,
+            reg_alpha=0.0,
+            reg_lambda=1.0,
+            **params,
+        )
+        model.fit(X_train, y_train)
+        val_pred_log = model.predict(X_val)
+
+        y_val_price = np.expm1(y_val)
+        val_pred_price = np.expm1(val_pred_log)
+        score = float(r2_score(y_val_price, val_pred_price))
+
+        if score > best_score:
+            best_score = score
+            best_params = params
+            best_model = model
+
+    if best_model is None:
+        raise ValueError("XGBoost hyperparameter tuning failed to produce a model.")
+
+    # Refit the best configuration on the full training split.
     model = XGBRegressor(
         objective="reg:squarederror",
-        n_estimators=400,
-        learning_rate=0.05,
-        max_depth=6,
-        subsample=0.9,
-        colsample_bytree=0.9,
         random_state=random_state,
         n_jobs=-1,
+        min_child_weight=2,
+        reg_alpha=0.0,
+        reg_lambda=1.0,
+        **best_params,
     )
-    model.fit(X_train, y_train)
+    model.fit(X_train_full, y_train_full)
 
-    predictions = model.predict(X_test)
-    r2 = float(r2_score(y_test, predictions))
-    rmse = float(np.sqrt(mean_squared_error(y_test, predictions)))
+    predictions_log = model.predict(X_test)
+    y_test_price = np.expm1(y_test)
+    predictions_price = np.expm1(predictions_log)
+    predictions_price = np.maximum(predictions_price, 0.0)
+
+    r2 = float(r2_score(y_test_price, predictions_price))
+    rmse = float(np.sqrt(mean_squared_error(y_test_price, predictions_price)))
+    mae = float(mean_absolute_error(y_test_price, predictions_price))
+    denom = np.maximum(y_test_price, 1e-6)
+    mape = float(np.mean(np.abs((y_test_price - predictions_price) / denom)) * 100)
 
     return {
         "model": model,
-        "predictions": predictions,
+        "predictions": predictions_log,
+        "predictions_price": predictions_price,
         "metrics": {
             "r2": r2,
             "rmse": rmse,
+            "mae": mae,
+            "mape_pct": mape,
+            "tuned_val_r2": float(best_score),
         },
+        "best_params": best_params,
+        "feature_columns": meta["feature_columns"],
+        "numeric_features": meta["numeric_features"],
+        "n_rows": meta["n_rows"],
+        "target_transform": "log1p",
+        "split_strategy": split_strategy,
+        "y_test_price": y_test_price,
         "X_test": X_test,
         "y_test": y_test,
     }
@@ -240,7 +397,28 @@ def compare_model_performance(
                 f"Could not extract R2 for city '{city}'. Expected float, {{'r2': ...}}, or {{'metrics': {{'r2': ...}}}}."
             )
 
-        rows.append({"city": str(city).lower(), "r2": r2_value})
+        row = {"city": str(city).lower(), "r2": r2_value}
+        if isinstance(payload, dict) and "metrics" in payload and isinstance(payload["metrics"], dict):
+            metric_rmse = payload["metrics"].get("rmse")
+            metric_mae = payload["metrics"].get("mae")
+            metric_mape = payload["metrics"].get("mape_pct")
+            metric_val_r2 = payload["metrics"].get("tuned_val_r2")
+            if metric_rmse is not None:
+                row["rmse"] = float(metric_rmse)
+            if metric_mae is not None:
+                row["mae"] = float(metric_mae)
+            if metric_mape is not None:
+                row["mape_pct"] = float(metric_mape)
+            if metric_val_r2 is not None:
+                row["val_r2"] = float(metric_val_r2)
+
+        if isinstance(payload, dict):
+            if payload.get("n_rows") is not None:
+                row["n_rows"] = int(payload["n_rows"])
+            if payload.get("feature_columns") is not None:
+                row["n_features"] = int(len(payload["feature_columns"]))
+
+        rows.append(row)
 
     comparison_df = pd.DataFrame(rows)
     if comparison_df.empty:
@@ -272,6 +450,63 @@ def compare_model_performance(
     plt.close()
 
     return comparison_df
+
+
+def plot_xgboost_actual_vs_predicted(
+    city_models_dict: dict[str, Any],
+    output_dir: Path | None = None,
+) -> Path:
+    """Create city-wise actual-vs-predicted scatter panels for XGBoost diagnostics."""
+    out_dir = output_dir or PLOTS_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    cities = sorted(city_models_dict.keys())
+    if not cities:
+        raise ValueError("No city XGBoost models were provided for diagnostics plotting.")
+
+    n_cols = min(3, len(cities))
+    n_rows = int(np.ceil(len(cities) / n_cols))
+    fig, axes = plt.subplots(n_rows, n_cols, figsize=(6 * n_cols, 5 * n_rows), squeeze=False)
+    axes_flat = axes.flatten()
+
+    for idx, city in enumerate(cities):
+        ax = axes_flat[idx]
+        payload = city_models_dict[city]
+        y_true = np.asarray(payload.get("y_test_price", []), dtype=float)
+        y_pred = np.asarray(payload.get("predictions_price", []), dtype=float)
+
+        if y_true.size == 0 or y_pred.size == 0:
+            ax.text(0.5, 0.5, "No test predictions", ha="center", va="center")
+            ax.set_title(city.title())
+            continue
+
+        color = CITY_COLORS.get(city, "#555555")
+        ax.scatter(y_true, y_pred, s=18, alpha=0.35, color=color, edgecolor="none")
+
+        lim_min = float(min(y_true.min(), y_pred.min()))
+        lim_max = float(max(y_true.max(), y_pred.max()))
+        ax.plot([lim_min, lim_max], [lim_min, lim_max], linestyle="--", linewidth=1.2, color="#222222")
+        ax.set_xlim(lim_min, lim_max)
+        ax.set_ylim(lim_min, lim_max)
+
+        r2 = payload.get("metrics", {}).get("r2")
+        rmse = payload.get("metrics", {}).get("rmse")
+        title = city.title()
+        if r2 is not None and rmse is not None:
+            title += f"\nR2={float(r2):.3f} | RMSE={float(rmse):.1f}"
+        ax.set_title(title)
+        ax.set_xlabel("Actual price")
+        ax.set_ylabel("Predicted price")
+
+    for j in range(len(cities), len(axes_flat)):
+        fig.delaxes(axes_flat[j])
+
+    fig.suptitle("XGBoost Diagnostics: Actual vs Predicted Price", y=1.02)
+    out_path = out_dir / "xgboost_actual_vs_predicted_by_city.png"
+    fig.tight_layout()
+    fig.savefig(out_path, dpi=160, bbox_inches="tight")
+    plt.close(fig)
+    return out_path
 
 
 def _clean_city_frame(df: pd.DataFrame, city: str) -> pd.DataFrame:

@@ -376,19 +376,32 @@ def export_calendar_summary(
         city_key = normalize_city_name(city_name)
         work = work[work["city"].astype(str).str.lower() == city_key].copy()
 
-    summary = (
-        work.groupby("city", as_index=False)
-        .agg(
-            rows=("listing_id", "size"),
-            unique_listings=("listing_id", "nunique"),
-            date_min=("date", "min"),
-            date_max=("date", "max"),
-            avg_price=("price", "mean"),
-            median_price=("price", "median"),
-            availability_rate=("available", "mean"),
+    rows: list[dict[str, object]] = []
+    for city, city_df in work.groupby("city", dropna=False):
+        city_df = city_df.copy()
+        price_df = city_df
+        if "price_source" in city_df.columns:
+            non_global = city_df[city_df["price_source"] != "global_fallback"]
+            if not non_global.empty:
+                price_df = non_global
+            else:
+                # If all prices are global fallback values, avoid reporting misleading city medians.
+                price_df = city_df.iloc[0:0]
+
+        rows.append(
+            {
+                "city": city,
+                "rows": int(len(city_df)),
+                "unique_listings": int(city_df["listing_id"].nunique()),
+                "date_min": city_df["date"].min(),
+                "date_max": city_df["date"].max(),
+                "avg_price": float(price_df["price"].mean()) if not price_df.empty else float("nan"),
+                "median_price": float(price_df["price"].median()) if not price_df.empty else float("nan"),
+                "availability_rate": float(city_df["available"].mean()) if not city_df.empty else float("nan"),
+            }
         )
-        .sort_values("city")
-    )
+
+    summary = pd.DataFrame(rows).sort_values("city").reset_index(drop=True)
 
     summary["availability_rate"] = summary["availability_rate"].round(4)
     summary["avg_price"] = summary["avg_price"].round(2)

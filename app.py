@@ -1,12 +1,17 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 import pandas as pd
-from flask import Flask, jsonify, render_template, send_file, abort
+from flask import Flask, jsonify, render_template, send_file, abort, request
+from sklearn.model_selection import train_test_split
 
 app = Flask(__name__)
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUTS  = BASE_DIR / "outputs"
+PROCESSED = BASE_DIR / "data" / "processed"
+
+CITY_KEYS = ["newyork", "chicago", "nashville", "neworleans", "austin", "losangeles"]
 
 
 def _read(path: Path) -> list[dict]:
@@ -19,6 +24,8 @@ def _read(path: Path) -> list[dict]:
 def _load() -> dict:
     d: dict = {}
     d["r2"]             = _read(OUTPUTS / "multi_city/tables/xgboost_city_metrics.csv")
+    d["xgb_progression"] = _read(OUTPUTS / "multi_city/tables/xgboost_progression_history.csv")
+    d["xgb_tuning"]      = _read(OUTPUTS / "multi_city/tables/xgboost_tuning_summary.csv")
     d["shap"]           = _read(OUTPUTS / "multi_city/tables/shap_top5_features_by_city.csv")
     d["shap_dominance"] = _read(OUTPUTS / "multi_city/tables/shap_city_dominance_checks.csv")
     d["cross_tests"]    = _read(OUTPUTS / "multi_city/tables/cross_city_tests.csv")
@@ -39,7 +46,182 @@ def _load() -> dict:
     return d
 
 
+def _build_predictor_cache() -> dict[str, dict[str, Any]]:
+    """Train lightweight city-level XGBoost models for interactive dashboard scenarios."""
+    try:
+        from xgboost import XGBRegressor
+    except Exception:
+        return {}
+
+    cache: dict[str, dict[str, Any]] = {}
+    numeric_features = ["accommodates", "amenities_count", "availability_365", "review_density"]
+
+    for city in CITY_KEYS:
+        path = PROCESSED / f"{city}_featured.csv"
+        if not path.exists():
+            continue
+
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+
+        required = numeric_features + ["price", "neighbourhood"]
+        if any(col not in df.columns for col in required):
+            continue
+
+        work = df.copy()
+        for col in numeric_features + ["price"]:
+            work[col] = pd.to_numeric(work[col], errors="coerce")
+        work["neighbourhood"] = work["neighbourhood"].astype(str)
+        work = work.dropna(subset=required)
+        work = work[(work["price"] > 0) & (work["price"] < work["price"].quantile(0.995))]
+        if len(work) < 200:
+            continue
+
+        # Keep top neighbourhoods to make the live model stable and fast.
+        top_n = 25
+        top_neighs = work["neighbourhood"].value_counts().head(top_n).index.tolist()
+        work["neighbourhood_model"] = work["neighbourhood"].where(
+            work["neighbourhood"].isin(top_neighs),
+            "OTHER",
+        )
+
+        X_num = work[numeric_features].copy()
+        X_neigh = pd.get_dummies(work["neighbourhood_model"], prefix="neigh")
+        X = pd.concat([X_num, X_neigh], axis=1).astype(float)
+        y = work["price"].astype(float)
+
+        X_train, X_test, y_train, y_test = train_test_split(
+            X,
+            y,
+            test_size=0.2,
+            random_state=42,
+        )
+
+        model = XGBRegressor(
+            objective="reg:squarederror",
+            n_estimators=250,
+            learning_rate=0.06,
+            max_depth=5,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            random_state=42,
+            n_jobs=2,
+        )
+        model.fit(X_train, y_train)
+
+        y_pred = model.predict(X_test)
+        rmse = float(((y_test - y_pred) ** 2).mean() ** 0.5)
+
+        ranges = {
+            col: {
+                "min": float(work[col].quantile(0.05)),
+                "max": float(work[col].quantile(0.95)),
+                "default": float(work[col].median()),
+            }
+            for col in numeric_features
+        }
+
+        cache[city] = {
+            "model": model,
+            "feature_columns": X.columns.tolist(),
+            "top_neighbourhoods": sorted(top_neighs),
+            "default_neighbourhood": top_neighs[0] if top_neighs else "OTHER",
+            "ranges": ranges,
+            "rmse": rmse,
+            "price_floor": float(work["price"].quantile(0.01)),
+            "price_cap": float(work["price"].quantile(0.99)),
+            "sample_size": int(len(work)),
+        }
+
+    return cache
+
+
+def _predict_price(city: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    model_info = PREDICTORS.get(city)
+    if not model_info:
+        return None
+
+    ranges = model_info["ranges"]
+    row = {
+        "accommodates": float(payload.get("accommodates", ranges["accommodates"]["default"])),
+        "amenities_count": float(payload.get("amenities_count", ranges["amenities_count"]["default"])),
+        "availability_365": float(payload.get("availability_365", ranges["availability_365"]["default"])),
+        "review_density": float(payload.get("review_density", ranges["review_density"]["default"])),
+    }
+
+    # Keep the UI predictor inside realistic training bounds.
+    for col, val in row.items():
+        row[col] = max(ranges[col]["min"], min(ranges[col]["max"], float(val)))
+
+    neighbourhood = str(payload.get("neighbourhood", model_info["default_neighbourhood"]))
+    if neighbourhood not in model_info["top_neighbourhoods"]:
+        neighbourhood = "OTHER"
+
+    X_pred = pd.DataFrame([row])
+    for col in model_info["feature_columns"]:
+        if col.startswith("neigh_"):
+            label = col.replace("neigh_", "")
+            X_pred[col] = 1.0 if label == neighbourhood else 0.0
+
+    X_pred = X_pred.reindex(columns=model_info["feature_columns"], fill_value=0.0)
+    pred = float(model_info["model"].predict(X_pred)[0])
+
+    low = max(0.0, pred - model_info["rmse"])
+    high = pred + model_info["rmse"]
+
+    return {
+        "city": city,
+        "prediction": round(pred, 2),
+        "band_low": round(low, 2),
+        "band_high": round(high, 2),
+        "rmse": round(float(model_info["rmse"]), 2),
+        "sample_size": model_info["sample_size"],
+        "used_neighbourhood": neighbourhood,
+    }
+
+
+def _predict_sweep(city: str, payload: dict[str, Any]) -> dict[str, Any] | None:
+    """Return a one-feature sensitivity curve for dashboard what-if analysis."""
+    model_info = PREDICTORS.get(city)
+    if not model_info:
+        return None
+
+    feature = str(payload.get("feature", "accommodates"))
+    if feature not in model_info["ranges"]:
+        return None
+
+    points = int(payload.get("points", 12))
+    points = max(6, min(points, 30))
+
+    feature_min = float(model_info["ranges"][feature]["min"])
+    feature_max = float(model_info["ranges"][feature]["max"])
+    if feature_max <= feature_min:
+        return None
+
+    step = (feature_max - feature_min) / (points - 1)
+    values = [feature_min + i * step for i in range(points)]
+
+    preds: list[float] = []
+    for val in values:
+        scenario = dict(payload)
+        scenario[feature] = val
+        out = _predict_price(city, scenario)
+        if out is None:
+            return None
+        preds.append(float(out["prediction"]))
+
+    return {
+        "city": city,
+        "feature": feature,
+        "x": [round(v, 4) for v in values],
+        "y": [round(v, 2) for v in preds],
+    }
+
+
 DATA = _load()
+PREDICTORS = _build_predictor_cache()
 
 
 @app.route("/")
@@ -67,6 +249,43 @@ def api_city(city: str):
                            "morans_i":round(sp.get("morans_i",0),3),
                            "coverage":round(sp.get("coverage_rate",0)*100,1)})
     return jsonify(stats)
+
+
+@app.route("/api/predict/meta")
+def api_predict_meta():
+    payload: dict[str, Any] = {}
+    for city, model_info in PREDICTORS.items():
+        payload[city] = {
+            "ranges": model_info["ranges"],
+            "top_neighbourhoods": model_info["top_neighbourhoods"],
+            "default_neighbourhood": model_info["default_neighbourhood"],
+            "sample_size": model_info["sample_size"],
+        }
+    return jsonify(payload)
+
+
+@app.route("/api/predict/<city>", methods=["POST"])
+def api_predict_city(city: str):
+    if city not in PREDICTORS:
+        return jsonify({"error": "City model unavailable"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    result = _predict_price(city, payload)
+    if result is None:
+        return jsonify({"error": "Prediction failed"}), 400
+    return jsonify(result)
+
+
+@app.route("/api/predict/sweep/<city>", methods=["POST"])
+def api_predict_sweep(city: str):
+    if city not in PREDICTORS:
+        return jsonify({"error": "City model unavailable"}), 404
+
+    payload = request.get_json(silent=True) or {}
+    result = _predict_sweep(city, payload)
+    if result is None:
+        return jsonify({"error": "Sweep failed"}), 400
+    return jsonify(result)
 
 @app.route("/map/<city>/<map_type>")
 def serve_map(city: str, map_type: str):
