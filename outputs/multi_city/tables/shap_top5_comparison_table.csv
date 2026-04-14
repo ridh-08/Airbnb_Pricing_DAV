@@ -1,0 +1,6 @@
+rank,austin,chicago,losangeles,nashville,neworleans,newyork
+1,accommodates,amenities_count,accommodates,accommodates,amenities_count,accommodates
+2,review_density,neigh_Near North Side,amenities_count,neigh_District 19,review_density,amenities_count
+3,availability_365,neigh_Loop,availability_365,amenities_count,availability_365,review_density
+4,amenities_count,availability_365,neigh_Exposition Park,availability_365,neigh_Lower Garden District,neigh_Midtown
+5,neigh_78704,review_density,review_density,review_density,neigh_Central Business District,availability_365

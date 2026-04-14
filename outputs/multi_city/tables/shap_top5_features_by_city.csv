@@ -1,0 +1,31 @@
+city,rank,feature,mean_abs_shap
+austin,1,accommodates,89.22886
+austin,2,review_density,24.098434
+austin,3,availability_365,20.468103
+austin,4,amenities_count,14.585416
+austin,5,neigh_78704,10.062304
+chicago,1,amenities_count,464.68405
+chicago,2,neigh_Near North Side,272.61487
+chicago,3,neigh_Loop,193.94241
+chicago,4,availability_365,189.44644
+chicago,5,review_density,174.58008
+losangeles,1,accommodates,17.857708
+losangeles,2,amenities_count,4.3273
+losangeles,3,availability_365,1.8259139
+losangeles,4,neigh_Exposition Park,1.0351583
+losangeles,5,review_density,0.73994404
+nashville,1,accommodates,53.94319
+nashville,2,neigh_District 19,14.0331135
+nashville,3,amenities_count,13.138727
+nashville,4,availability_365,10.252854
+nashville,5,review_density,8.866765
+neworleans,1,amenities_count,410.04416
+neworleans,2,review_density,380.07608
+neworleans,3,availability_365,331.46695
+neworleans,4,neigh_Lower Garden District,290.8272
+neworleans,5,neigh_Central Business District,290.7897
+newyork,1,accommodates,62.50397
+newyork,2,amenities_count,30.558477
+newyork,3,review_density,26.744085
+newyork,4,neigh_Midtown,19.877548
+newyork,5,availability_365,11.15908

@@ -1,0 +1,226 @@
+feature,mean_abs_shap
+accommodates,62.50397
+amenities_count,30.558477
+review_density,26.744085
+neigh_Midtown,19.877548
+availability_365,11.15908
+neigh_Upper West Side,7.8752284
+neigh_Hell's Kitchen,7.791138
+neigh_Chelsea,6.2484674
+neigh_Upper East Side,5.4615397
+neigh_Financial District,5.096904
+neigh_West Village,4.7286797
+neigh_Theater District,3.8324778
+neigh_East Village,3.6348097
+neigh_Williamsburg,3.3656392
+neigh_SoHo,3.3446395
+neigh_Murray Hill,3.2103016
+neigh_Tribeca,3.0475032
+neigh_Lower East Side,2.6179993
+neigh_Greenpoint,2.3558557
+neigh_Greenwich Village,1.7821803
+neigh_Kips Bay,1.7130215
+neigh_Gramercy,1.5251455
+neigh_Bedford-Stuyvesant,1.2303584
+neigh_Nolita,1.1474453
+neigh_Chinatown,1.0929307
+neigh_Park Slope,1.0358514
+neigh_Flatiron District,0.97380817
+neigh_Harlem,0.7830337
+neigh_Clinton Hill,0.7228595
+neigh_Fort Greene,0.6844832
+neigh_East New York,0.6569831
+neigh_Gowanus,0.65575886
+neigh_Long Island City,0.65404546
+neigh_Carroll Gardens,0.50198954
+neigh_Jamaica,0.48709723
+neigh_Boerum Hill,0.47852844
+neigh_NoHo,0.4548025
+neigh_Downtown Brooklyn,0.40548095
+neigh_East Flatbush,0.39552546
+neigh_Rosedale,0.3789917
+neigh_Brooklyn Heights,0.35077178
+neigh_Prospect Heights,0.34782916
+neigh_Cobble Hill,0.3072514
+neigh_Crown Heights,0.27230498
+neigh_Washington Heights,0.27188918
+neigh_Flushing,0.26109356
+neigh_Bushwick,0.2517996
+neigh_Little Italy,0.22529419
+neigh_East Elmhurst,0.22259839
+neigh_New Brighton,0.18059045
+neigh_St. Albans,0.13444746
+neigh_Jackson Heights,0.128954
+neigh_Woodhaven,0.12732929
+neigh_Arverne,0.118249774
+neigh_Sunnyside,0.118038565
+neigh_Roosevelt Island,0.11564201
+neigh_Stuyvesant Town,0.105047956
+neigh_Van Nest,0.10149687
+neigh_Brownsville,0.09265045
+neigh_Springfield Gardens,0.08289223
+neigh_Williamsbridge,0.07863138
+neigh_Vinegar Hill,0.078160994
+neigh_South Slope,0.067677274
+neigh_Battery Park City,0.05893711
+neigh_Woodside,0.056789212
+neigh_Riverdale,0.05382902
+neigh_Brighton Beach,0.047220387
+neigh_Concourse,0.045423184
+neigh_Elmhurst,0.044926584
+neigh_Cypress Hills,0.04080361
+neigh_Ozone Park,0.038353104
+neigh_Bayside,0.036469348
+neigh_Sea Gate,0.033641398
+neigh_Bensonhurst,0.029378222
+neigh_DUMBO,0.027502794
+neigh_Coney Island,0.024579924
+neigh_Silver Lake,0.023327297
+neigh_Glendale,0.022219192
+neigh_Windsor Terrace,0.020405468
+neigh_St. George,0.019772163
+neigh_Forest Hills,0.019120513
+neigh_Edenwald,0.0188636
+neigh_Kensington,0.016699104
+neigh_Astoria,0.016430844
+neigh_Hunts Point,0.015321142
+neigh_Pelham Bay,0.014810303
+neigh_Ridgewood,0.01381218
+neigh_Throgs Neck,0.010756652
+neigh_Navy Yard,0.010104559
+neigh_Fresh Meadows,0.010090946
+neigh_Flatlands,0.00993372
+neigh_Fort Hamilton,0.009518583
+neigh_Edgemere,0.009167332
+neigh_Wakefield,0.0077406755
+neigh_Fordham,0.0069416855
+neigh_East Harlem,0.0066916486
+neigh_Mott Haven,0.0065311193
+neigh_Morris Park,0.006340976
+neigh_Far Rockaway,0.0063243154
+neigh_Jamaica Hills,0.0060285525
+neigh_Clason Point,0.005229422
+neigh_Sheepshead Bay,0.003769165
+neigh_Tompkinsville,0.0037441358
+neigh_Baychester,0.0032233114
+neigh_Parkchester,0.0028489227
+neigh_Civic Center,0.0027000394
+neigh_Rockaway Beach,0.0025136585
+neigh_Bay Ridge,0.0009448345
+neigh_Prospect-Lefferts Gardens,0.0006552027
+neigh_Laurelton,0.00030717568
+neigh_Morningside Heights,0.0002940495
+neigh_Dongan Hills,0.0
+neigh_Ditmars Steinway,0.0
+neigh_Great Kills,0.0
+neigh_Gravesend,0.0
+neigh_Grant City,0.0
+neigh_Graniteville,0.0
+neigh_Gerritsen Beach,0.0
+neigh_Fort Wadsworth,0.0
+neigh_Fieldston,0.0
+neigh_Flatbush,0.0
+neigh_Emerson Hill,0.0
+neigh_Eltingville,0.0
+neigh_Eastchester,0.0
+neigh_East Morrisania,0.0
+neigh_Douglaston,0.0
+neigh_Dyker Heights,0.0
+neigh_Bull's Head,0.0
+neigh_Cambria Heights,0.0
+neigh_Bayswater,0.0
+"neigh_Bay Terrace, Staten Island",0.0
+neigh_Bay Terrace,0.0
+neigh_Bath Beach,0.0
+neigh_Arrochar,0.0
+neigh_Arden Heights,0.0
+neigh_Bellerose,0.0
+neigh_Belle Harbor,0.0
+neigh_Breezy Point,0.0
+neigh_Borough Park,0.0
+neigh_Bergen Beach,0.0
+neigh_Belmont,0.0
+neigh_Bronxdale,0.0
+neigh_Briarwood,0.0
+neigh_City Island,0.0
+neigh_Canarsie,0.0
+neigh_College Point,0.0
+neigh_Co-op City,0.0
+neigh_Claremont Village,0.0
+neigh_Clifton,0.0
+neigh_Castleton Corners,0.0
+neigh_Castle Hill,0.0
+"neigh_Chelsea, Staten Island",0.0
+neigh_Columbia St,0.0
+neigh_Country Club,0.0
+neigh_Corona,0.0
+neigh_Concord,0.0
+neigh_Concourse Village,0.0
+neigh_Jamaica Estates,0.0
+neigh_Inwood,0.0
+neigh_Holliswood,0.0
+neigh_Howland Hook,0.0
+neigh_Port Morris,0.0
+neigh_Pelham Gardens,0.0
+neigh_Olinville,0.0
+neigh_Oakwood,0.0
+neigh_New Springville,0.0
+neigh_New Dorp Beach,0.0
+neigh_North Riverdale,0.0
+neigh_Norwood,0.0
+neigh_Neponsit,0.0
+neigh_Midwood,0.0
+neigh_Middle Village,0.0
+neigh_Midland Beach,0.0
+neigh_Morrisania,0.0
+neigh_Morris Heights,0.0
+neigh_Mount Hope,0.0
+neigh_Mount Eden,0.0
+neigh_Melrose,0.0
+neigh_Maspeth,0.0
+neigh_Mill Basin,0.0
+neigh_Huguenot,0.0
+neigh_Howard Beach,0.0
+neigh_Highbridge,0.0
+neigh_Hollis,0.0
+neigh_Kew Gardens Hills,0.0
+neigh_Lighthouse Hill,0.0
+neigh_Kingsbridge,0.0
+neigh_Kew Gardens,0.0
+neigh_Little Neck,0.0
+neigh_Longwood,0.0
+neigh_Manhattan Beach,0.0
+neigh_Marble Hill,0.0
+neigh_Mariners Harbor,0.0
+neigh_Grymes Hill,0.0
+neigh_Spuyten Duyvil,0.0
+neigh_South Ozone Park,0.0
+neigh_South Beach,0.0
+neigh_Shore Acres,0.0
+neigh_Schuylerville,0.0
+neigh_Soundview,0.0
+neigh_Prince's Bay,0.0
+neigh_Rego Park,0.0
+neigh_Red Hook,0.0
+neigh_Randall Manor,0.0
+neigh_Queens Village,0.0
+neigh_Port Richmond,0.0
+neigh_Richmond Hill,0.0
+neigh_Rosebank,0.0
+neigh_Rossville,0.0
+neigh_Stapleton,0.0
+neigh_Unionport,0.0
+neigh_University Heights,0.0
+neigh_Two Bridges,0.0
+neigh_Sunset Park,0.0
+neigh_Todt Hill,0.0
+neigh_Tottenville,0.0
+neigh_Tremont,0.0
+neigh_Whitestone,0.0
+neigh_Westerleigh,0.0
+neigh_Westchester Square,0.0
+neigh_West Farms,0.0
+neigh_West Brighton,0.0
+neigh_Willowbrook,0.0
+neigh_Woodlawn,0.0
+neigh_Woodrow,0.0

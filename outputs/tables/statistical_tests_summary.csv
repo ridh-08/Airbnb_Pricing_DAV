@@ -1,0 +1,9 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Kolmogorov-Smirnov (chicago vs newyork),chicago,newyork,0.6125,2.5044586639539517e-14,significant
+Mann-Whitney U (chicago vs newyork),chicago,newyork,725.0,3.0528776647420086e-17,significant
+Mann-Whitney U (chicago: room type),chicago:Entire home/apt,chicago:Private room,238.0,0.04532756207797214,significant
+Mann-Whitney U (chicago: room type),chicago:Entire home/apt,chicago:Shared room,294.0,0.22589603416594928,not significant
+Mann-Whitney U (chicago: room type),chicago:Private room,chicago:Shared room,377.0,0.6500473326305418,not significant
+Mann-Whitney U (newyork: room type),newyork:Entire home/apt,newyork:Private room,343.0,0.7163811613729257,not significant
+Mann-Whitney U (newyork: room type),newyork:Private room,newyork:Shared room,370.0,0.7420405626975426,not significant
+Mann-Whitney U (newyork: room type),newyork:Entire home/apt,newyork:Shared room,363.0,0.8378782509838621,not significant

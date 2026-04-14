@@ -1,0 +1,7 @@
+city,morans_i,morans_i_p_value,morans_i_significant,spatial_cluster_class
+newyork,0.36428792003271354,0.001,True,significant_positive_moderate
+chicago,0.3271679457225866,0.001,True,significant_positive_moderate
+nashville,0.4670251151743909,0.001,True,significant_positive_strong
+neworleans,0.1194857235860614,0.028,True,significant_positive_weak
+austin,0.46477425778570863,0.001,True,significant_positive_strong
+losangeles,0.2730663582376473,0.001,True,significant_positive_moderate

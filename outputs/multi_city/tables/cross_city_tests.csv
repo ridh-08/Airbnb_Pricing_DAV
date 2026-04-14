@@ -1,0 +1,17 @@
+test,group_1,group_2,statistic,p_value,p_value_bh,significant_0_05_bh
+Kruskal-Wallis (all cities),all,all,929.4854183669647,1.1050693791471896e-198,1.1050693791471896e-198,True
+Mann-Whitney U (city pair),austin,chicago,42047341.0,1.238137724395615e-14,2.321508233241778e-14,True
+Mann-Whitney U (city pair),austin,losangeles,226704452.0,5.469108875184265e-13,9.115181458640441e-13,True
+Mann-Whitney U (city pair),austin,nashville,41881902.0,1.3293391395009487e-65,4.985021773128558e-65,True
+Mann-Whitney U (city pair),austin,neworleans,37774185.5,0.010876221692521488,0.010876221692521488,True
+Mann-Whitney U (city pair),austin,newyork,192065574.5,7.808894132680704e-06,9.010262460785427e-06,True
+Mann-Whitney U (city pair),chicago,losangeles,208656364.5,4.86987204564723e-32,1.0435440097815493e-31,True
+Mann-Whitney U (city pair),chicago,nashville,38128856.5,3.499958699648332e-10,4.772670954065907e-10,True
+Mann-Whitney U (city pair),chicago,neworleans,33622197.5,1.179187941596919e-08,1.4739849269961489e-08,True
+Mann-Whitney U (city pair),chicago,newyork,169666727.0,1.6205159063518193e-46,4.051289765879548e-46,True
+Mann-Whitney U (city pair),losangeles,nashville,184530396.0,7.83111576996665e-120,5.873336827474987e-119,True
+Mann-Whitney U (city pair),losangeles,neworleans,172259848.0,1.2543551054071531e-05,1.3439518986505213e-05,True
+Mann-Whitney U (city pair),losangeles,newyork,863714891.0,2.2529517081465877e-66,1.1264758540732938e-65,True
+Mann-Whitney U (city pair),nashville,neworleans,39136734.5,7.750415610549594e-48,2.325124683164878e-47,True
+Mann-Whitney U (city pair),nashville,newyork,196160897.0,3.025099717967735e-147,4.5376495769516025e-146,True
+Mann-Whitney U (city pair),neworleans,newyork,139202809.5,2.4154325788725895e-11,3.623148868308884e-11,True
