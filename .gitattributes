@@ -1,5 +1,10 @@
-Chicago/reviews.csv/reviews.csv filter=lfs diff=lfs merge=lfs -text
-New[[:space:]]York/calendar.csv/calendar.csv filter=lfs diff=lfs merge=lfs -text
-New[[:space:]]York/reviews.csv/reviews.csv filter=lfs diff=lfs merge=lfs -text
-data/processed/chicago_reviews_clean.csv filter=lfs diff=lfs merge=lfs -text
-data/processed/newyork_reviews_clean.csv filter=lfs diff=lfs merge=lfs -text
+# Track large raw city CSV files via Git LFS
+Austin/**/*.csv filter=lfs diff=lfs merge=lfs -text
+Chicago/**/*.csv filter=lfs diff=lfs merge=lfs -text
+Los\ Angeles/**/*.csv filter=lfs diff=lfs merge=lfs -text
+Nashville/**/*.csv filter=lfs diff=lfs merge=lfs -text
+New\ Orleans/**/*.csv filter=lfs diff=lfs merge=lfs -text
+New\ York/**/*.csv filter=lfs diff=lfs merge=lfs -text
+
+# Track processed data snapshots via Git LFS
+data/processed/*.csv filter=lfs diff=lfs merge=lfs -text
