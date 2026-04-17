@@ -128,7 +128,7 @@ def plot_demand_score_vs_price(
         if ax is None:
             continue
         title = ax.get_title()
-        city = "newyork" if "newyork" in title.lower() else "chicago"
+        city = next((key for key in CITY_COLORS if key in title.lower()), None)
         ax.set_facecolor("#f7f7f7")
         ax.grid(alpha=0.25)
         ax.set_title(title, color=CITY_COLORS.get(city, "#222222"), fontweight="bold")

@@ -1,0 +1,7 @@
+city,target_transform,n_rows,n_features,max_depth,learning_rate,n_estimators,subsample,colsample_bytree,val_r2
+newyork,log1p,22939,44,7,0.04,380,0.85,0.95,0.5970007673476083
+chicago,log1p,8186,44,7,0.04,380,0.85,0.95,0.6766631324136975
+nashville,log1p,8804,44,6,0.04,450,0.9,0.9,0.4190975506013278
+neworleans,log1p,6558,44,4,0.05,300,0.85,0.85,0.8275193281322268
+austin,log1p,10206,44,5,0.05,350,0.9,0.9,0.4678969387446772
+losangeles,log1p,38062,42,4,0.05,300,0.85,0.85,0.9999999703979306

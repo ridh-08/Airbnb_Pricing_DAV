@@ -34,7 +34,11 @@ def load_featured_data(city_name: str | None = None) -> pd.DataFrame:
 
 def _price_analysis_frame(df: pd.DataFrame, city_name: str | None = None) -> pd.DataFrame:
     """Restrict to observed (non-imputed) prices for accurate price plots."""
-    filtered = df[(df["price"] > 0) & (~df["price_imputed"])].copy()
+    work = df.copy()
+    if "price_imputed" not in work.columns:
+        work["price_imputed"] = False
+
+    filtered = work[(work["price"] > 0) & (~work["price_imputed"])].copy()
     if city_name is not None:
         city_key = normalize_city_name(city_name)
         filtered = filtered[filtered["city"].astype(str).str.lower() == city_key].copy()

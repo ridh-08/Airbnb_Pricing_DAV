@@ -183,6 +183,7 @@ Cross-city comparative artifacts include:
 - Cross-city non-parametric statistical tests
 
 Key files:
+- `outputs/multi_city/plots/price_distribution.png`
 - `outputs/multi_city/plots/city_median_price.png`
 - `outputs/multi_city/plots/cluster_composition_by_city.png`
 - `outputs/multi_city/plots/city_feature_profile_heatmap.png`
@@ -239,3 +240,71 @@ Recommended structure for your written submission:
 - Limitations and future work
 
 All required figures/tables for those sections are already produced under `outputs/` and `outputs/multi_city/`.
+
+## 8. Netlify Deployment (Static Dashboard)
+
+This dashboard can be deployed on Netlify as a static site using precomputed outputs.
+
+1. Deploy backend API first (Section 9), then set `API_BASE_URL` and export static bundle:
+
+```powershell
+set API_BASE_URL=https://<your-backend-domain>
+C:/Users/Riddhi/AppData/Local/Programs/Python/Python311/python.exe export_static_dashboard.py
+```
+
+2. Confirm generated files:
+- `netlify_static/index.html`
+- `netlify_static/maps/*_price_choropleth.html`
+- `netlify_static/maps/*_cluster_map.html`
+
+3. Deploy to Netlify:
+- Option A: drag-and-drop the `netlify_static/` folder in Netlify Deploys UI.
+- Option B: connect this repo and set publish directory to `netlify_static` (already set in `netlify.toml`).
+
+Notes:
+- Static mode includes all chart/analysis views and map embeds.
+- If `API_BASE_URL` is set during export, live XGBoost predictor + API-driven city updates stay enabled from Netlify.
+- If `API_BASE_URL` is omitted, the dashboard works fully offline except live predictor/API-only calls.
+
+## 9. Backend Deployment (Flask + XGBoost API)
+
+This project includes a production-ready Flask backend for predictor endpoints.
+
+### 9.1 Endpoints
+
+- `GET /api/health`
+- `GET /api/data`
+- `GET /api/city/<city>`
+- `GET /api/predict/meta`
+- `POST /api/predict/<city>`
+- `POST /api/predict/sweep/<city>`
+- `GET /map/<city>/choropleth`
+- `GET /map/<city>/cluster`
+
+### 9.2 Deploy on Render
+
+1. Push this repository to GitHub.
+2. In Render, create a new Web Service from the repo.
+3. Render auto-detects config from `render.yaml` (or use manual values below):
+- Build command: `pip install -r requirements.txt`
+- Start command: `gunicorn app:app --bind 0.0.0.0:$PORT --timeout 180`
+4. Wait for deployment and copy backend URL, e.g. `https://airbnb-xgboost-api.onrender.com`.
+
+### 9.3 Wire Netlify to Backend
+
+After backend is live:
+
+```powershell
+set API_BASE_URL=https://airbnb-xgboost-api.onrender.com
+C:/Users/Riddhi/AppData/Local/Programs/Python/Python311/python.exe export_static_dashboard.py
+```
+
+Deploy the regenerated `netlify_static/` folder to Netlify.
+
+### 9.4 Quick Health Check
+
+Open:
+
+- `https://<backend-domain>/api/health`
+
+Expected response includes `status: ok` and available predictor model cities.

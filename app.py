@@ -1,17 +1,27 @@
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 import pandas as pd
 from flask import Flask, jsonify, render_template, send_file, abort, request
+from flask_cors import CORS
 from sklearn.model_selection import train_test_split
 
+from src.config import CITY_COLORS, CITY_FOLDERS
+
 app = Flask(__name__)
+CORS(app)
 BASE_DIR = Path(__file__).resolve().parent
 OUTPUTS  = BASE_DIR / "outputs"
 PROCESSED = BASE_DIR / "data" / "processed"
+API_BASE_URL = os.getenv("API_BASE_URL", "").strip().rstrip("/")
 
 CITY_KEYS = ["newyork", "chicago", "nashville", "neworleans", "austin", "losangeles"]
+
+
+def _normalize_city_key(value: str) -> str:
+    return str(value).strip().lower().replace(" ", "").replace("_", "").replace("-", "")
 
 
 def _read(path: Path) -> list[dict]:
@@ -34,6 +44,7 @@ def _load() -> dict:
     d["calendar"]       = _read(OUTPUTS / "tables/calendar_summary.csv")
     d["spatial"]        = _read(OUTPUTS / "tables/spatial_summary.csv")
     d["fixed_effects"]  = _read(OUTPUTS / "multi_city/tables/pooled_fixed_effects.csv")
+    city_price_fallback: dict[str, dict[str, float]] = {}
     try:
         df = pd.read_csv(OUTPUTS / "tables/calendar_temporal_summary.csv")
         monthly = (
@@ -41,9 +52,66 @@ def _load() -> dict:
             .mean().reset_index().sort_values(["city","month_num"])
         )
         d["calendar_monthly"] = monthly.to_dict("records")
+
+        fallback_df = (
+            df.groupby("city", as_index=False)["avg_price"]
+            .agg(avg_price="mean", median_price="median")
+        )
+        for row in fallback_df.to_dict("records"):
+            city = str(row.get("city", "")).strip()
+            if not city:
+                continue
+            city_price_fallback[city] = {
+                "avg_price": float(row.get("avg_price", 0.0) or 0.0),
+                "median_price": float(row.get("median_price", 0.0) or 0.0),
+            }
     except Exception:
         d["calendar_monthly"] = []
+
+    for row in d.get("calendar", []):
+        city = str(row.get("city", "")).strip()
+        if city not in city_price_fallback:
+            continue
+
+        avg_price = pd.to_numeric(row.get("avg_price"), errors="coerce")
+        median_price = pd.to_numeric(row.get("median_price"), errors="coerce")
+
+        if pd.isna(avg_price):
+            row["avg_price"] = round(city_price_fallback[city]["avg_price"], 2)
+        if pd.isna(median_price):
+            row["median_price"] = round(city_price_fallback[city]["median_price"], 2)
+
     return d
+
+
+def _build_city_cards() -> list[dict[str, Any]]:
+    cards: list[dict[str, Any]] = []
+    for city in CITY_KEYS:
+        cal = next((row for row in DATA.get("calendar", []) if row.get("city") == city), {})
+        r2 = next((row for row in DATA.get("r2", []) if row.get("city") == city), {})
+        cards.append(
+            {
+                "city": city,
+                "label": CITY_FOLDERS.get(city, city.replace("newyork", "New York").title()),
+                "color": CITY_COLORS.get(city, "#666666"),
+                "median_price": cal.get("median_price"),
+                "r2": float(r2.get("r2", 0.0) or 0.0),
+                "availability_rate": float(cal.get("availability_rate", 0.0) or 0.0),
+            }
+        )
+    return cards
+
+
+def _build_predictor_meta() -> dict[str, dict[str, Any]]:
+    meta: dict[str, dict[str, Any]] = {}
+    for city, model_info in PREDICTORS.items():
+        meta[city] = {
+            "ranges": model_info.get("ranges", {}),
+            "top_neighbourhoods": model_info.get("top_neighbourhoods", []),
+            "default_neighbourhood": model_info.get("default_neighbourhood", "OTHER"),
+            "sample_size": model_info.get("sample_size", 0),
+        }
+    return meta
 
 
 def _build_predictor_cache() -> dict[str, dict[str, Any]]:
@@ -226,7 +294,19 @@ PREDICTORS = _build_predictor_cache()
 
 @app.route("/")
 def index():
-    return render_template("dashboard.html")
+    return render_template(
+        "dashboard.html",
+        initial_data=DATA,
+        initial_predictor_meta=_build_predictor_meta(),
+        city_cards=_build_city_cards(),
+        has_api=True,
+        api_base_url=API_BASE_URL,
+    )
+
+
+@app.route("/api/health")
+def api_health():
+    return jsonify({"status": "ok", "cities_with_models": sorted(PREDICTORS.keys())})
 
 @app.route("/api/data")
 def api_data():
@@ -289,12 +369,16 @@ def api_predict_sweep(city: str):
 
 @app.route("/map/<city>/<map_type>")
 def serve_map(city: str, map_type: str):
-    if city not in {"newyork","chicago","nashville","neworleans","austin","losangeles"}: abort(404)
+    city_key = _normalize_city_key(city)
+    if city_key not in set(CITY_KEYS):
+        abort(404)
     if map_type not in {"choropleth","cluster"}: abort(404)
     suffix = "price_choropleth" if map_type=="choropleth" else "cluster_map"
-    path = OUTPUTS / f"plots/{city}_{suffix}.html"
+    path = OUTPUTS / f"plots/{city_key}_{suffix}.html"
     if not path.exists(): abort(404)
     return send_file(path)
 
 if __name__ == "__main__":
-    app.run(debug=True, port=5050)
+    port = int(os.getenv("PORT", "5050"))
+    debug = os.getenv("FLASK_DEBUG", "0") == "1"
+    app.run(debug=debug, host="0.0.0.0", port=port)

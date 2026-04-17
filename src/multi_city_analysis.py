@@ -17,6 +17,7 @@ from src.regression_analysis import (
     plot_xgboost_actual_vs_predicted,
     train_xgboost_model,
 )
+from src.visualization import plot_price_distribution
 
 
 MULTI_CITY_OUTPUT_DIR = OUTPUTS_DIR / "multi_city"
@@ -324,6 +325,7 @@ def run_multi_city_analysis(
     combined = _combine_city_frames(city_dataframes)
 
     plot_paths = [
+        plot_price_distribution(combined, output_dir=plots_dir),
         plot_city_median_price(combined, output_dir=plots_dir),
         plot_cluster_share_by_city(combined, output_dir=plots_dir),
         plot_city_feature_heatmap(combined, output_dir=plots_dir),

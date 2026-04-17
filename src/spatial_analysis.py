@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 import importlib
+import re
 
 import folium
 import geopandas as gpd
@@ -39,7 +40,16 @@ CITY_META = {
 
 
 def _norm_name(series: pd.Series) -> pd.Series:
-    return series.astype(str).str.strip().str.lower()
+    normalized = series.astype(str).str.lower().str.strip()
+    # Canonicalize punctuation/spacing so map joins are stable across data sources.
+    normalized = normalized.str.replace(r"[^a-z0-9]+", " ", regex=True)
+    return normalized.str.replace(r"\s+", " ", regex=True).str.strip()
+
+
+def _norm_text(value: object) -> str:
+    text = str(value).strip().lower()
+    text = re.sub(r"[^a-z0-9]+", " ", text)
+    return re.sub(r"\s+", " ", text).strip()
 
 
 def _load_city_inputs(city_key: str) -> tuple[pd.DataFrame, gpd.GeoDataFrame]:
@@ -59,14 +69,20 @@ def _build_neighbourhood_price_merge(
     city_df: pd.DataFrame,
     geo_gdf: gpd.GeoDataFrame,
 ) -> tuple[gpd.GeoDataFrame, pd.DataFrame]:
-    avg_price = (
+    avg_price_raw = (
         city_df.dropna(subset=["neighbourhood", "price"])
         .groupby("neighbourhood", as_index=False)["price"]
         .mean()
         .rename(columns={"price": "avg_price"})
     )
 
-    avg_price["neighbourhood_key"] = _norm_name(avg_price["neighbourhood"])
+    avg_price_raw["neighbourhood_key"] = _norm_name(avg_price_raw["neighbourhood"])
+
+    # Enforce unique join keys to avoid one-to-many merges that miscolor polygons.
+    avg_price = (
+        avg_price_raw.groupby("neighbourhood_key", as_index=False)
+        .agg(avg_price=("avg_price", "mean"), neighbourhood=("neighbourhood", "first"))
+    )
 
     merged = geo_gdf.copy()
     merged["neighbourhood_key"] = _norm_name(merged["neighbourhood"])
@@ -295,14 +311,9 @@ def create_price_choropleth(
     colormap = linear.YlOrRd_09.scale(float(available_prices.min()), float(available_prices.max()))
     colormap.caption = f"Average Listing Price ({city_key.title()})"
 
-    value_lookup = {
-        row["neighbourhood_key"]: row["avg_price"]
-        for _, row in merged_gdf[["neighbourhood_key", "avg_price"]].drop_duplicates().iterrows()
-    }
-
     def style_fn(feature: dict) -> dict:
-        key = str(feature["properties"].get("neighbourhood", "")).strip().lower()
-        value = value_lookup.get(key)
+        props = feature.get("properties", {})
+        value = pd.to_numeric(pd.Series([props.get("avg_price")]), errors="coerce").iloc[0]
         if pd.isna(value):
             return {
                 "fillColor": "#d3d3d3",

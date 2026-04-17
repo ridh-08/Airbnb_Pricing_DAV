@@ -7,26 +7,32 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
 <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Manrope:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;700&display=swap" rel="stylesheet" />
 <script src="https://cdn.plot.ly/plotly-2.30.0.min.js"></script>
+<script>
+window.__INITIAL_DATA__ = {{ initial_data | tojson }};
+window.__INITIAL_PREDICTOR_META__ = {{ initial_predictor_meta | tojson }};
+window.__HAS_API__ = {{ has_api | default(true) | tojson }};
+window.__API_BASE_URL__ = {{ api_base_url | default('') | tojson }};
+</script>
 {% raw %}
 <style>
 /* ── RESET & VARIABLES ─────────────────────────────────── */
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 :root{
-  --bg:#0d1117;--s1:#121826;--s2:#172033;--card:#1b2536;--card2:#202c40;
-  --b1:rgba(190,210,235,.15);--b2:rgba(207,225,247,.30);
-  --text:#edf2fb;--muted:#9bb0ca;--dim:#314158;
-  --active:#ff7a59;--active-20:#ff7a5938;--active-08:#ff7a5918;
+  --bg:#f5f8ff;--s1:#eef3ff;--s2:#e8effd;--card:#ffffff;--card2:#f2f6ff;
+  --b1:rgba(93,121,168,.18);--b2:rgba(73,108,166,.35);
+  --text:#18263d;--muted:#4e6589;--dim:#a9bad6;
+  --active:#e85d3b;--active-20:#e85d3b3a;--active-08:#e85d3b17;
   --fh:'Space Grotesk',sans-serif;--fb:'Manrope',sans-serif;--fm:'IBM Plex Mono',monospace;
   --r:14px;--rs:8px;
   --ny:#ff7a59;--ch:#34c6a0;--na:#ffb703;--no:#c77dff;--au:#4cc9f0;--la:#8da0cb;
 }
 html{scroll-behavior:smooth}
-body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:14px;line-height:1.6;
+body{background:var(--bg);color:var(--text);font-family:var(--fb);font-size:15px;line-height:1.65;
   overflow-x:hidden;cursor:auto;
   background-image:
-    radial-gradient(1300px 560px at 12% -8%, rgba(76, 201, 240, .15), transparent 60%),
+    radial-gradient(1300px 560px at 12% -8%, rgba(76, 201, 240, .18), transparent 62%),
     radial-gradient(900px 420px at 88% 2%, rgba(255, 122, 89, .14), transparent 58%),
-    linear-gradient(180deg, #0d1117 0%, #0f1522 100%)}
+    linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%)}
 
 /* ── CURSOR ────────────────────────────────────────────── */
 #cursor{position:fixed;width:10px;height:10px;border-radius:50%;background:var(--active);
@@ -43,7 +49,7 @@ body:hover #cursor{opacity:1}
 /* ── NOISE OVERLAY ─────────────────────────────────────── */
 body::before{content:'';position:fixed;inset:0;
   background-image:url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='1'/%3E%3C/svg%3E");
-  opacity:.025;pointer-events:none;z-index:0}
+  opacity:.018;pointer-events:none;z-index:0}
 
 /* ── SCROLLBAR ─────────────────────────────────────────── */
 ::-webkit-scrollbar{width:5px}
@@ -112,14 +118,14 @@ h1 mark::after{content:'';position:absolute;bottom:-2px;left:0;right:0;
 .city-card.active::before{transform:scaleX(1)}
 .city-card.active::after{opacity:1}
 .city-card.active{border-color:var(--cc,#666);
-  box-shadow:0 0 24px rgba(0,0,0,.5),0 0 0 1px var(--cc) inset}
+  box-shadow:0 10px 26px rgba(80,103,146,.16),0 0 0 1px var(--cc) inset}
 .city-card:hover:not(.active){border-color:var(--b2);transform:translateY(-2px)}
 .cc-name{font-family:var(--fh);font-size:15px;font-weight:700;margin-bottom:8px;
   color:var(--text);transition:color .25s}
 .city-card.active .cc-name{color:var(--cc,#fff)}
 .cc-price{font-family:var(--fm);font-size:18px;font-weight:700;
   color:var(--cc,#fff);opacity:.9;margin-bottom:2px}
-.cc-r2{font-family:var(--fm);font-size:10px;color:var(--muted);letter-spacing:.05em}
+.cc-r2{font-family:var(--fm);font-size:11px;color:var(--muted);letter-spacing:.05em}
 .cc-bar{height:2px;background:var(--dim);border-radius:1px;margin-top:12px;overflow:hidden}
 .cc-bar-fill{height:100%;border-radius:1px;background:var(--cc,#666);
   transition:width .6s cubic-bezier(.4,0,.2,1)}
@@ -149,7 +155,7 @@ h1 mark::after{content:'';position:absolute;bottom:-2px;left:0;right:0;
   color:var(--muted);text-transform:uppercase;margin-bottom:6px}
 .kpi-val{font-family:var(--fh);font-size:28px;font-weight:800;
   letter-spacing:-.02em;line-height:1;color:var(--text)}
-.kpi-sub{font-size:11px;color:var(--muted);margin-top:4px}
+.kpi-sub{font-size:12px;color:var(--muted);margin-top:4px}
 
 /* ── SHAP BARS ─────────────────────────────────────────── */
 .shap-bars-wrap{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:22px}
@@ -169,14 +175,14 @@ h1 mark::after{content:'';position:absolute;bottom:-2px;left:0;right:0;
 .sec-head{display:flex;align-items:baseline;gap:16px;margin-bottom:28px}
 .sec-num{font-family:var(--fm);font-size:11px;color:var(--active);letter-spacing:.15em}
 h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
-.sec-sub{font-size:12px;color:var(--muted);margin-top:4px;margin-bottom:28px}
+.sec-sub{font-size:13px;color:var(--muted);margin-top:4px;margin-bottom:28px}
 
 /* ── CARDS ─────────────────────────────────────────────── */
 .card{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);
   padding:24px;transition:border-color .25s,box-shadow .25s,transform .25s}
-.card:hover{border-color:var(--b2);box-shadow:0 10px 34px rgba(0,0,0,.30);transform:translateY(-2px)}
+.card:hover{border-color:var(--b2);box-shadow:0 14px 34px rgba(76,98,140,.14);transform:translateY(-2px)}
 .card-title{font-family:var(--fh);font-size:14px;font-weight:700;margin-bottom:4px}
-.card-desc{font-size:11px;color:var(--muted);margin-bottom:18px;line-height:1.5}
+.card-desc{font-size:12px;color:var(--muted);margin-bottom:18px;line-height:1.55}
 
 .g2{display:grid;grid-template-columns:1fr 1fr;gap:20px}
 .g3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:20px}
@@ -195,7 +201,7 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
 .pred-label{font-family:var(--fm);font-size:9px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:6px}
 .pred-value{font-family:var(--fh);font-size:18px;font-weight:700;color:var(--active);margin-top:4px}
 .pred-range{width:100%;accent-color:var(--active)}
-.pred-select{width:100%;background:#0e1625;color:var(--text);border:1px solid var(--b1);border-radius:8px;padding:8px;font-family:var(--fm);font-size:11px}
+.pred-select{width:100%;background:#ffffff;color:var(--text);border:1px solid var(--b1);border-radius:8px;padding:8px;font-family:var(--fm);font-size:11px}
 .pred-btn{margin-top:4px;padding:10px 14px;border-radius:10px;border:1px solid var(--active);background:var(--active-08);color:var(--active);font-family:var(--fm);font-size:10px;letter-spacing:.12em;text-transform:uppercase;cursor:pointer;transition:.2s}
 .pred-btn:hover{background:var(--active-20)}
 .pred-result{background:var(--card2);border:1px solid var(--b1);border-radius:var(--r);padding:18px}
@@ -222,7 +228,7 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
 @media(max-width:700px){.arch-row{grid-template-columns:1fr}}
 .arch{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);
   padding:22px;position:relative;overflow:hidden;transition:transform .25s,box-shadow .25s}
-.arch:hover{transform:translateY(-3px);box-shadow:0 8px 32px rgba(0,0,0,.4)}
+.arch:hover{transform:translateY(-3px);box-shadow:0 10px 28px rgba(76,98,140,.14)}
 .arch-stripe{position:absolute;top:0;left:0;right:0;height:3px}
 .arch-icon{font-size:26px;margin-bottom:12px;display:block}
 .arch-name{font-family:var(--fh);font-size:16px;font-weight:700;
@@ -258,7 +264,7 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
   overflow:hidden;position:relative}
 .map-label{position:absolute;top:12px;left:12px;z-index:10;
   font-family:var(--fm);font-size:10px;letter-spacing:.1em;text-transform:uppercase;
-  background:rgba(4,4,13,.85);color:var(--text);padding:5px 10px;
+  background:rgba(255,255,255,.9);color:var(--text);padding:5px 10px;
   border-radius:6px;border:1px solid var(--b2);backdrop-filter:blur(4px)}
 .map-loading{position:absolute;inset:0;display:flex;align-items:center;
   justify-content:center;background:var(--card);
@@ -268,7 +274,7 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
   border-radius:50%;animation:rotate .7s linear infinite}
 @keyframes rotate{to{transform:rotate(360deg)}}
 .map-wrap iframe{width:100%;height:440px;border:none;display:block;
-  filter:brightness(.9) saturate(.85);transition:filter .3s}
+  filter:brightness(1.02) saturate(.95);transition:filter .3s}
 .map-wrap:hover iframe{filter:brightness(1) saturate(1)}
 
 table{border-collapse:collapse}
@@ -292,7 +298,7 @@ th,td{padding:8px 10px}
 
 /* ── TOOLTIP ───────────────────────────────────────────── */
 #tooltip{position:fixed;pointer-events:none;z-index:9000;
-  background:rgba(14,14,34,.95);border:1px solid var(--b2);border-radius:var(--rs);
+  background:rgba(255,255,255,.95);border:1px solid var(--b2);border-radius:var(--rs);
   padding:12px 16px;backdrop-filter:blur(8px);opacity:0;
   transform:translateY(4px);transition:opacity .15s,transform .15s;
   max-width:220px;font-size:12px}
@@ -359,7 +365,16 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 
     <div id="city-selector">
       <div class="cs-label">Select a city to explore</div>
-      <div class="cs-row" id="csRow"></div>
+      <div class="cs-row" id="csRow">
+        {% for card in city_cards %}
+        <button class="city-card" data-city="{{ card.city }}" style="--cc:{{ card.color }}">
+          <div class="cc-name">{{ card.label }}</div>
+          <div class="cc-price">{% if card.median_price %}${{ card.median_price | round(0) | int }}{% else %}—{% endif %}</div>
+          <div class="cc-r2">R² {{ '%.3f'|format(card.r2) }} · {{ (card.availability_rate * 100) | round(0) | int }}% avail</div>
+          <div class="cc-bar"><div class="cc-bar-fill" style="width:{{ (card.r2 * 100) | round(1) }}%"></div></div>
+        </button>
+        {% endfor %}
+      </div>
     </div>
   </div>
 </section>
@@ -707,19 +722,82 @@ const CL_LABELS = ['Budget / High Avail','Mid-Range Active','Well-Equipped','Pre
 const TAGLINES = {newyork:'Tourism-dominant market',chicago:'Mixed-demand market',
   nashville:'Music city · emerging',neworleans:'Festival & tourism hub',
   austin:'Tech & culture driven',losangeles:'Sprawling coastal market'};
+const HAS_API = Boolean(window.__HAS_API__);
+const API_BASE_URL = String(window.__API_BASE_URL__ || '').trim().replace(/\/+$/,'');
+
+function apiUrl(path){
+  const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+  return `${API_BASE_URL}${normalizedPath}`;
+}
 
 const BASE = {
   paper_bgcolor:'rgba(0,0,0,0)',plot_bgcolor:'rgba(0,0,0,0)',
-  font:{family:"'Outfit',sans-serif",color:'#e2e2f5',size:12},
+  font:{family:"'Outfit',sans-serif",color:'#18263d',size:12},
   margin:{t:8,r:8,b:40,l:50},
-  xaxis:{gridcolor:'#1a1a35',zeroline:false,tickfont:{size:11,color:'#6060a0'},linecolor:'#1a1a35'},
-  yaxis:{gridcolor:'#1a1a35',zeroline:false,tickfont:{size:11,color:'#6060a0'},linecolor:'#1a1a35'},
+  xaxis:{gridcolor:'#d8e2f2',zeroline:false,tickfont:{size:11,color:'#4e6589'},linecolor:'#d8e2f2'},
+  yaxis:{gridcolor:'#d8e2f2',zeroline:false,tickfont:{size:11,color:'#4e6589'},linecolor:'#d8e2f2'},
 };
 const CFG = {responsive:true,displayModeBar:false};
 
 let selectedCity = 'newyork';
-let DATA = null;
-let PRED_META = {};
+let DATA = window.__INITIAL_DATA__ || null;
+let PRED_META = window.__INITIAL_PREDICTOR_META__ || {};
+
+function mapUrlsForCity(city){
+  const cityKey = String(city || '').toLowerCase().replace(/[\s_-]+/g, '');
+  return HAS_API ? {
+    choropleth: apiUrl(`/map/${cityKey}/choropleth`),
+    cluster: apiUrl(`/map/${cityKey}/cluster`),
+  } : {
+    choropleth: `./maps/${cityKey}_price_choropleth.html`,
+    cluster: `./maps/${cityKey}_cluster_map.html`,
+  };
+}
+
+function cityStatsFromData(cityKey){
+  const r2=Array.isArray(DATA?.r2) ? DATA.r2.find(d=>d.city===cityKey) : null;
+  const cal=Array.isArray(DATA?.calendar) ? DATA.calendar.find(d=>d.city===cityKey) : null;
+  const sp=Array.isArray(DATA?.spatial) ? DATA.spatial.find(d=>d.city===cityKey) : null;
+  const sh1=Array.isArray(DATA?.shap)
+    ? DATA.shap.find(d=>d.city===cityKey && Number(d.rank)===1)
+    : null;
+  return {
+    city: cityKey,
+    r2: r2 ? Number(r2.r2||0) : 0,
+    avg_price: cal ? cal.avg_price : null,
+    median_price: cal ? cal.median_price : null,
+    availability_pct: cal ? Number(cal.availability_rate||0)*100 : 0,
+    unique_listings: cal ? Number(cal.unique_listings||0) : 0,
+    top_feature: sh1 ? String(sh1.feature||'').replace('neigh_','') : '—',
+    top_neighbourhood: sp ? sp.top_priced_neighbourhood : '—',
+    top_neigh_price: sp ? Math.round(Number(sp.top_avg_price||0)) : '—',
+    morans_i: sp ? Number(sp.morans_i||0).toFixed(3) : '—',
+  };
+}
+
+function applyCityProfileStats(cityKey,stats,init=false){
+  document.getElementById('profileName').textContent=CL[cityKey]||cityKey;
+  document.getElementById('profileName').style.color=CC[cityKey];
+  document.getElementById('profileTagline').textContent=TAGLINES[cityKey]||'';
+
+  const prev={med:0,r2:0,av:0,li:0};
+  if(!init){
+    prev.med=parseFloat(document.getElementById('kpiMedian').textContent.replace(/[$,]/g,''))||0;
+    prev.r2=parseFloat(document.getElementById('kpiR2').textContent)||0;
+    prev.av=parseFloat(document.getElementById('kpiAvail').textContent)||0;
+    prev.li=parseInt(document.getElementById('kpiListings').textContent.replace(/,/g,''))||0;
+  }
+
+  tween(document.getElementById('kpiMedian'),prev.med,stats.median_price||0,700,'$','');
+  tween(document.getElementById('kpiR2'),prev.r2,stats.r2||0,700,'','',2);
+  tween(document.getElementById('kpiAvail'),prev.av,stats.availability_pct||0,700,'','%',1);
+  tween(document.getElementById('kpiListings'),prev.li,stats.unique_listings||0,700,'','');
+
+  document.getElementById('profNeigh').textContent=
+    (stats.top_neighbourhood||'—')+' · $'+(stats.top_neigh_price||'—').toLocaleString();
+  document.getElementById('profMorans').textContent='Moran\'s I: '+(stats.morans_i||'—');
+  document.getElementById('profTopFeat').textContent='Top driver: '+(stats.top_feature||'—');
+}
 
 // ── CURSOR ───────────────────────────────────────────────────────────
 const cur = document.getElementById('cursor');
@@ -792,8 +870,7 @@ function setAccent(city){
 }
 
 // ── MAIN DATA FETCH ──────────────────────────────────────────────────
-fetch('/api/data').then(r=>r.json()).then(d=>{
-  DATA=d;
+function initializeDashboard(){
   buildCityCards();
   buildPredictorSection();
   buildProgressionSection();
@@ -805,67 +882,93 @@ fetch('/api/data').then(r=>r.json()).then(d=>{
   buildStatsSection();
   selectCity('newyork',true);
   initMapButtons();
-}).catch(err=>console.error(err));
+}
+
+if (DATA) {
+  initializeDashboard();
+} else {
+  if(!HAS_API){
+    console.error('Dashboard bootstrap failed: no embedded data and no API backend available.');
+  } else {
+    fetch(apiUrl('/api/data')).then(r=>r.json()).then(d=>{
+      DATA=d;
+      buildCityCards();
+      buildPredictorSection();
+      buildProgressionSection();
+      buildCompareCharts();
+      buildSHAPCharts();
+      buildClusterCharts();
+      buildSpatialSection();
+      buildCalendarSection();
+      buildStatsSection();
+      selectCity('newyork',true);
+      initMapButtons();
+    }).catch(err=>console.error(err));
+  }
+}
 
 // ── CITY SELECTION ───────────────────────────────────────────────────
 function selectCity(city,init=false){
-  selectedCity=city;
-  setAccent(city);
+  const cityKey = String(city || '').toLowerCase().replace(/[\s_-]+/g, '');
+  if(!CO.includes(cityKey)) return;
+  selectedCity=cityKey;
+  setAccent(cityKey);
 
   // pill state
   document.querySelectorAll('.city-card').forEach(c=>{
-    c.classList.toggle('active',c.dataset.city===city);
+    c.classList.toggle('active',c.dataset.city===cityKey);
   });
   // map buttons
   document.querySelectorAll('.map-tog').forEach(b=>{
-    b.classList.toggle('active',b.dataset.city===city);
+    b.classList.toggle('active',b.dataset.city===cityKey);
   });
+
+  // Keep map and predictor city state resilient even if downstream chart updates fail.
+  loadMaps(cityKey);
+  setupPredictorForCity(cityKey);
 
   // update live profile
-  fetch(`/api/city/${city}`).then(r=>r.json()).then(s=>{
-    document.getElementById('profileName').textContent=CL[city]||city;
-    document.getElementById('profileName').style.color=CC[city];
-    document.getElementById('profileTagline').textContent=TAGLINES[city]||'';
-
-    const prev={med:0,r2:0,av:0,li:0};
-    if(!init){
-      prev.med=parseFloat(document.getElementById('kpiMedian').textContent.replace(/[$,]/g,''))||0;
-      prev.r2=parseFloat(document.getElementById('kpiR2').textContent)||0;
-      prev.av=parseFloat(document.getElementById('kpiAvail').textContent)||0;
-      prev.li=parseInt(document.getElementById('kpiListings').textContent.replace(/,/g,''))||0;
-    }
-    tween(document.getElementById('kpiMedian'),prev.med,s.median_price||0,700,'$','');
-    tween(document.getElementById('kpiR2'),prev.r2,s.r2||0,700,'','',2);
-    tween(document.getElementById('kpiAvail'),prev.av,s.availability_pct||0,700,'','%',1);
-    tween(document.getElementById('kpiListings'),prev.li,s.unique_listings||0,700,'','');
-
-    document.getElementById('profNeigh').textContent=
-      (s.top_neighbourhood||'—')+' · $'+(s.top_neigh_price||'—').toLocaleString();
-    document.getElementById('profMorans').textContent='Moran\'s I: '+(s.morans_i||'—');
-    document.getElementById('profTopFeat').textContent='Top driver: '+(s.top_feature||'—');
-  });
+  if(HAS_API){
+    fetch(apiUrl(`/api/city/${cityKey}`)).then(r=>r.json()).then(s=>{
+      applyCityProfileStats(cityKey,s,init);
+    }).catch(()=>{
+      applyCityProfileStats(cityKey,cityStatsFromData(cityKey),init);
+    });
+  } else {
+    applyCityProfileStats(cityKey,cityStatsFromData(cityKey),init);
+  }
 
   // SHAP bars
-  updateSHAPBars(city);
+  try {
+    updateSHAPBars(cityKey);
+  } catch (err) {
+    console.warn('SHAP update failed for city switch:', cityKey, err);
+  }
 
   // spotlight charts
   if(!init){
-    spotlightBarChart('chartPrice', city);
-    spotlightFEChart(city);
-    spotlightScatter(city);
-    updateR2List(city);
+    try {
+      spotlightBarChart('chartPrice', cityKey);
+      spotlightFEChart(cityKey);
+      spotlightScatter(cityKey);
+      updateR2List(cityKey);
+    } catch (err) {
+      console.warn('Spotlight update failed for city switch:', cityKey, err);
+    }
   }
-
-  // maps
-  loadMaps(city);
-
-  // predictor controls
-  setupPredictorForCity(city);
 }
 
 // ── CITY SELECTOR CARDS ──────────────────────────────────────────────
 function buildCityCards(){
   const row=document.getElementById('csRow');
+  if(!row) return;
+  row.querySelectorAll('.city-card').forEach(card=>{
+    if(!card.dataset.bound){
+      card.dataset.bound='1';
+      card.addEventListener('click',()=>selectCity(card.dataset.city));
+    }
+  });
+  if(row.children.length) return;
   CO.forEach(city=>{
     const cal=DATA.calendar.find(d=>d.city===city)||{};
     const r2d=DATA.r2.find(d=>d.city===city)||{};
@@ -887,7 +990,23 @@ function buildCityCards(){
 
 // ── PREDICTOR ───────────────────────────────────────────────────────
 function buildPredictorSection(){
-  fetch('/api/predict/meta').then(r=>r.json()).then(meta=>{
+  if(!HAS_API){
+    document.getElementById('predPrice').textContent='$—';
+    document.getElementById('predBand').textContent='Live predictor is disabled in static deployment mode.';
+    document.getElementById('predMetaCity').textContent='City model: Flask API required';
+    document.getElementById('predMetaNeigh').textContent='Neighbourhood: —';
+    document.getElementById('predMetaRmse').textContent='Model uncertainty (RMSE): —';
+    document.getElementById('predMetaSample').textContent='Training sample: —';
+    ['predAccommodates','predAmenities','predAvailability','predReviewDensity','predNeighbourhood','predSensitivityFeature','predRun']
+      .forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.disabled=true;
+      });
+    Plotly.purge('chartPredSensitivity');
+    return;
+  }
+
+  fetch(apiUrl('/api/predict/meta')).then(r=>r.json()).then(meta=>{
     PRED_META=meta||{};
 
     ['predAccommodates','predAmenities','predAvailability','predReviewDensity'].forEach(id=>{
@@ -982,11 +1101,12 @@ function getPredictorPayload(){
 }
 
 function runPrediction(){
+  if(!HAS_API) return;
   if(!PRED_META[selectedCity]) return;
 
   const payload=getPredictorPayload();
 
-  fetch(`/api/predict/${selectedCity}`,{
+  fetch(apiUrl(`/api/predict/${selectedCity}`),{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload),
@@ -1012,6 +1132,7 @@ function runPrediction(){
 }
 
 function renderPredictionSensitivity(basePayload){
+  if(!HAS_API) return;
   const sel=document.getElementById('predSensitivityFeature');
   const feature=(sel && sel.value) ? sel.value : 'accommodates';
   const labels={
@@ -1022,7 +1143,7 @@ function renderPredictionSensitivity(basePayload){
   };
 
   const payload={...basePayload,feature,points:14};
-  fetch(`/api/predict/sweep/${selectedCity}`,{
+  fetch(apiUrl(`/api/predict/sweep/${selectedCity}`),{
     method:'POST',
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify(payload),
@@ -1455,12 +1576,14 @@ function initMapButtons(){
 }
 
 function loadMaps(city){
+  const cityKey=String(city||'').toLowerCase().replace(/[\s_-]+/g,'');
+  const urls=mapUrlsForCity(CO.includes(cityKey)?cityKey:'newyork');
   document.getElementById('loadC').style.display='flex';
   document.getElementById('loadK').style.display='flex';
-  document.getElementById('iC').src=`/map/${city}/choropleth`;
-  document.getElementById('iK').src=`/map/${city}/cluster`;
+  document.getElementById('iC').src=urls.choropleth;
+  document.getElementById('iK').src=urls.cluster;
   document.querySelectorAll('.map-tog').forEach(b=>{
-    b.classList.toggle('active',b.dataset.city===city);
+    b.classList.toggle('active',b.dataset.city===cityKey);
   });
 }
 

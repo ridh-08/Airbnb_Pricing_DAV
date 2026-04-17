@@ -396,6 +396,13 @@ def clean_calendar(
     cleaned.loc[listing_fill_mask, "price_source"] = "listing_fallback"
     cleaned.loc[global_fill_mask, "price_source"] = "global_fallback"
 
+    global_fill_share = float((cleaned["price_source"] == "global_fallback").mean())
+    if global_fill_share >= 0.9:
+        print(
+            f"[WARN] {city_key}: {global_fill_share:.1%} of calendar prices use global fallback; "
+            "month-weekday price heatmaps may appear flat."
+        )
+
     cleaned["available"] = (
         cleaned["available"]
         .astype(str)

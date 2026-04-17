@@ -163,7 +163,7 @@ def _plot_temporal_heatmap(
     output_dir: Path | None = None,
     city_name: str | None = None,
 ) -> Path:
-    """Plot month x weekday heatmaps with a consistent metric color scale across cities."""
+    """Plot month x weekday heatmaps with per-city color scales for comparability within each panel."""
     if temporal_df.empty:
         raise ValueError("Temporal dataframe is empty; cannot create heatmap.")
 
@@ -181,11 +181,6 @@ def _plot_temporal_heatmap(
     city_keys = sorted(work["city"].astype(str).str.lower().unique().tolist())
     n_cities = len(city_keys)
 
-    vmin = float(work[metric_col].min())
-    vmax = float(work[metric_col].max())
-    if vmin == vmax:
-        vmax = vmin + 1e-9
-
     if n_cities == 1:
         fig, ax = plt.subplots(1, 1, figsize=(8.5, 6.5))
         axes = [ax]
@@ -195,42 +190,51 @@ def _plot_temporal_heatmap(
         fig, axes_arr = plt.subplots(nrows, ncols, figsize=(5.5 * ncols, 4.5 * nrows), sharex=False, sharey=False)
         axes = list(axes_arr.ravel())
 
-    heatmap_ref = None
     for idx, city in enumerate(city_keys):
         ax = axes[idx]
         city_df = work[work["city"].astype(str).str.lower() == city].copy()
         pivot = city_df.pivot(index="month", columns="weekday", values=metric_col)
         pivot = pivot.reindex(index=MONTH_LABELS, columns=WEEKDAY_ORDER)
 
-        hm = sns.heatmap(
+        city_vmin = float(city_df[metric_col].min())
+        city_vmax = float(city_df[metric_col].max())
+        flat_city = city_vmin == city_vmax
+        if flat_city:
+            city_vmax = city_vmin + 1e-9
+
+        sns.heatmap(
             pivot,
             ax=ax,
             cmap="YlOrRd",
-            vmin=vmin,
-            vmax=vmax,
-            cbar=False,
+            vmin=city_vmin,
+            vmax=city_vmax,
+            cbar=True,
+            cbar_kws={"shrink": 0.78, "pad": 0.02},
             linewidths=0.3,
             linecolor="#f2f2f2",
         )
-        heatmap_ref = hm
         ax.set_title(city.title())
         ax.set_xlabel("Weekday")
         ax.set_ylabel("Month")
 
+        if flat_city:
+            ax.text(
+                0.5,
+                0.5,
+                "No price variability\nin source data",
+                transform=ax.transAxes,
+                ha="center",
+                va="center",
+                fontsize=9,
+                color="#6f6f6f",
+                bbox={"facecolor": "white", "alpha": 0.7, "edgecolor": "none"},
+            )
+
     for j in range(n_cities, len(axes)):
         axes[j].axis("off")
 
-    if heatmap_ref is not None:
-        colorbar = fig.colorbar(
-            heatmap_ref.collections[0],
-            ax=axes,
-            fraction=0.025,
-            pad=0.02,
-        )
-        colorbar.set_label(title_prefix)
-
     fig.suptitle(f"{title_prefix}: Month x Weekday", fontsize=14)
-    fig.tight_layout(rect=[0, 0, 0.96, 0.95])
+    fig.tight_layout(rect=[0, 0, 1, 0.95])
 
     suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
     out_path = out_dir / f"{out_name}{suffix}.png"

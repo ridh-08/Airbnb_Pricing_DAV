@@ -34,10 +34,11 @@ MODULE_NAMES = [
 def build_dummy_df(n_per_city: int = 80) -> pd.DataFrame:
     """Build a synthetic dataframe with required columns for fix validation."""
     rng = np.random.default_rng(42)
-    cities = np.array(["newyork"] * n_per_city + ["chicago"] * n_per_city)
+    city_order = ["newyork", "chicago", "austin", "losangeles", "nashville", "neworleans"]
+    cities = np.array(sum(([city] * n_per_city for city in city_order), []))
     n_total = len(cities)
 
-    room_type_choices = np.array(["Entire home/apt", "Private room", "Shared room"])
+    room_type_choices = np.array(["Entire home/apt", "Private room", "Shared room", "Hotel room"])
     room_type = room_type_choices[np.arange(n_total) % len(room_type_choices)]
 
     neighbourhood = np.array(
@@ -52,7 +53,18 @@ def build_dummy_df(n_per_city: int = 80) -> pd.DataFrame:
     number_of_reviews = rng.integers(1, 350, size=n_total)
     minimum_nights = rng.integers(1, 30, size=n_total)
 
-    city_price_base = np.where(cities == "newyork", 180.0, 120.0)
+    city_price_base = np.select(
+        [
+            cities == "newyork",
+            cities == "chicago",
+            cities == "austin",
+            cities == "losangeles",
+            cities == "nashville",
+            cities == "neworleans",
+        ],
+        [180.0, 155.0, 140.0, 200.0, 145.0, 135.0],
+        default=150.0,
+    )
     price = (
         city_price_base
         + accommodates * 18
@@ -66,12 +78,44 @@ def build_dummy_df(n_per_city: int = 80) -> pd.DataFrame:
     latitude = np.where(
         cities == "newyork",
         rng.normal(40.73, 0.05, size=n_total),
-        rng.normal(41.88, 0.05, size=n_total),
+        np.where(
+            cities == "chicago",
+            rng.normal(41.88, 0.05, size=n_total),
+            np.where(
+                cities == "austin",
+                rng.normal(30.27, 0.04, size=n_total),
+                np.where(
+                    cities == "losangeles",
+                    rng.normal(34.05, 0.05, size=n_total),
+                    np.where(
+                        cities == "nashville",
+                        rng.normal(36.16, 0.04, size=n_total),
+                        rng.normal(29.95, 0.04, size=n_total),
+                    ),
+                ),
+            ),
+        ),
     )
     longitude = np.where(
         cities == "newyork",
         rng.normal(-73.98, 0.06, size=n_total),
-        rng.normal(-87.63, 0.06, size=n_total),
+        np.where(
+            cities == "chicago",
+            rng.normal(-87.63, 0.06, size=n_total),
+            np.where(
+                cities == "austin",
+                rng.normal(-97.74, 0.05, size=n_total),
+                np.where(
+                    cities == "losangeles",
+                    rng.normal(-118.24, 0.06, size=n_total),
+                    np.where(
+                        cities == "nashville",
+                        rng.normal(-86.78, 0.05, size=n_total),
+                        rng.normal(-90.07, 0.05, size=n_total),
+                    ),
+                ),
+            ),
+        ),
     )
 
     # Demand score with the requested weighted normalization structure.

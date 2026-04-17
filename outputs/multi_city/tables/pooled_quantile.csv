@@ -1,73 +1,73 @@
 quantile,term,coefficient,p_value
-0.25,Intercept,4.098536185243006,0.0
-0.25,C(city)[T.chicago],0.1256561640949485,0.0
-0.25,C(city)[T.losangeles],1.008107701988024,0.0
-0.25,C(city)[T.nashville],0.2907717148414122,0.0
-0.25,C(city)[T.neworleans],-0.10273535991086646,0.0
-0.25,C(city)[T.newyork],0.9643290009839802,0.0
-0.25,C(room_type)[T.Hotel room],0.32879805027135944,0.0
-0.25,C(room_type)[T.Private room],-0.7432151549768093,0.0
-0.25,C(room_type)[T.Shared room],-1.45660208818029,0.0
-0.25,accommodates,0.0961735208688479,0.0
-0.25,C(city)[T.chicago]:accommodates,-0.015231279359149141,0.0
-0.25,C(city)[T.losangeles]:accommodates,-0.09347327142165351,0.0
-0.25,C(city)[T.nashville]:accommodates,-0.046649754772047025,0.0
-0.25,C(city)[T.neworleans]:accommodates,0.012017150311542935,0.0
-0.25,C(city)[T.newyork]:accommodates,-0.08001499606762774,0.0
-0.25,availability_365,-1.2983976529989949e-05,7.44028555195493e-116
-0.25,number_of_reviews,-3.2426653817363427e-06,6.253794063075039e-05
-0.25,amenities_count,0.0014983065305624876,0.0
-0.25,C(city)[T.chicago]:amenities_count,0.003909229905886491,0.0
-0.25,C(city)[T.losangeles]:amenities_count,-0.0014631582619042405,0.0
-0.25,C(city)[T.nashville]:amenities_count,0.0017357421775283655,0.0
-0.25,C(city)[T.neworleans]:amenities_count,0.0015891559501692853,0.0
-0.25,C(city)[T.newyork]:amenities_count,-0.0022352777738436913,0.0
-0.25,price_per_person,0.00029931019201537984,0.0
-0.5,Intercept,4.3225800998625346,0.0
-0.5,C(city)[T.chicago],0.27397778490558267,0.0
-0.5,C(city)[T.losangeles],0.7546389081981033,0.0
-0.5,C(city)[T.nashville],0.5347723293816671,0.0
-0.5,C(city)[T.neworleans],0.1702506349538453,0.0
-0.5,C(city)[T.newyork],0.7028447074699216,0.0
-0.5,C(room_type)[T.Hotel room],0.3250163422208061,0.0
-0.5,C(room_type)[T.Private room],-0.729651376220616,0.0
-0.5,C(room_type)[T.Shared room],-1.4410710176791568,0.0
-0.5,accommodates,0.11947142427857216,0.0
-0.5,C(city)[T.chicago]:accommodates,-0.0386354855894524,0.0
-0.5,C(city)[T.losangeles]:accommodates,-0.11296281934903618,0.0
-0.5,C(city)[T.nashville]:accommodates,-0.08577292090984656,0.0
-0.5,C(city)[T.neworleans]:accommodates,-0.014841549230425244,0.0
-0.5,C(city)[T.newyork]:accommodates,-0.08991722069890784,0.0
-0.5,availability_365,1.197862829760421e-09,0.9968722607119895
-0.5,number_of_reviews,-1.6320641886558018e-09,0.9970954037231607
-0.5,amenities_count,0.0003828476674243575,0.0
-0.5,C(city)[T.chicago]:amenities_count,0.0028902967133035418,0.0
-0.5,C(city)[T.losangeles]:amenities_count,-0.00038282902642094996,0.0
-0.5,C(city)[T.nashville]:amenities_count,0.000528618807948078,0.0
-0.5,C(city)[T.neworleans]:amenities_count,-0.0003828389490081463,1.3031049224290837e-183
-0.5,C(city)[T.newyork]:amenities_count,2.460621908539906e-05,0.00838852993955579
-0.5,price_per_person,0.0005360268363296672,0.0
-0.75,Intercept,4.450209710731542,0.0
-0.75,C(city)[T.chicago],0.045643075553130075,6.061348418892513e-42
-0.75,C(city)[T.losangeles],0.24092715130566944,0.0
-0.75,C(city)[T.nashville],0.09338034962684105,5.962035216273716e-143
-0.75,C(city)[T.neworleans],0.019866900804629495,1.232581497126346e-07
-0.75,C(city)[T.newyork],-0.04913874153061215,8.831649514017318e-89
-0.75,C(room_type)[T.Hotel room],0.0730935762076399,4.1301833938195084e-38
-0.75,C(room_type)[T.Private room],-0.6102243613400304,0.0
-0.75,C(room_type)[T.Shared room],-1.1980577999790967,0.0
-0.75,accommodates,0.14748084811198225,0.0
-0.75,C(city)[T.chicago]:accommodates,-0.026804210395653172,0.0
-0.75,C(city)[T.losangeles]:accommodates,-0.09779437179987838,0.0
-0.75,C(city)[T.nashville]:accommodates,-0.060050317803153064,0.0
-0.75,C(city)[T.neworleans]:accommodates,-0.023700855768389317,0.0
-0.75,C(city)[T.newyork]:accommodates,0.021285405948614056,0.0
-0.75,availability_365,4.716185427064423e-05,5.243029858672213e-154
-0.75,number_of_reviews,-5.653477516853744e-06,0.03559256091393709
-0.75,amenities_count,-0.002329175805713568,0.0
-0.75,C(city)[T.chicago]:amenities_count,0.004121507305440808,0.0
-0.75,C(city)[T.losangeles]:amenities_count,0.0024605811323676896,0.0
-0.75,C(city)[T.nashville]:amenities_count,0.002775293414101654,4.976011985135109e-282
-0.75,C(city)[T.neworleans]:amenities_count,0.002146633223681693,3.4155389230543186e-149
-0.75,C(city)[T.newyork]:amenities_count,0.006914041267739535,0.0
-0.75,price_per_person,0.005007976111650152,0.0
+0.25,Intercept,4.098536168520923,0.0
+0.25,C(city)[T.chicago],0.12565637834688914,0.0
+0.25,C(city)[T.losangeles],1.0081077325161232,0.0
+0.25,C(city)[T.nashville],0.29077169825347937,0.0
+0.25,C(city)[T.neworleans],-0.1027353571647609,0.0
+0.25,C(city)[T.newyork],0.9643289834741609,0.0
+0.25,C(room_type)[T.Hotel room],0.3287980634171106,0.0
+0.25,C(room_type)[T.Private room],-0.7432151548240213,0.0
+0.25,C(room_type)[T.Shared room],-1.4566021020319226,0.0
+0.25,accommodates,0.09617351918172679,0.0
+0.25,C(city)[T.chicago]:accommodates,-0.01523129547254598,0.0
+0.25,C(city)[T.losangeles]:accommodates,-0.09347326382680876,0.0
+0.25,C(city)[T.nashville]:accommodates,-0.04664975299367491,0.0
+0.25,C(city)[T.neworleans]:accommodates,0.012017152537926457,0.0
+0.25,C(city)[T.newyork]:accommodates,-0.08001498507698335,0.0
+0.25,availability_365,-1.2983900705726414e-05,7.461393506722341e-116
+0.25,number_of_reviews,-3.242625837784896e-06,6.255039897511553e-05
+0.25,amenities_count,0.0014983067109497483,0.0
+0.25,C(city)[T.chicago]:amenities_count,0.003909228479242799,0.0
+0.25,C(city)[T.losangeles]:amenities_count,-0.0014631597310152955,0.0
+0.25,C(city)[T.nashville]:amenities_count,0.001735742177590538,0.0
+0.25,C(city)[T.neworleans]:amenities_count,0.0015891553117217683,0.0
+0.25,C(city)[T.newyork]:amenities_count,-0.002235278449962408,0.0
+0.25,price_per_person,0.0002993101911952945,0.0
+0.5,Intercept,4.322580066858791,0.0
+0.5,C(city)[T.chicago],0.2739778301329352,0.0
+0.5,C(city)[T.losangeles],0.7546389411436394,0.0
+0.5,C(city)[T.nashville],0.5347723593586124,0.0
+0.5,C(city)[T.neworleans],0.1702506688889116,0.0
+0.5,C(city)[T.newyork],0.7028449205681682,0.0
+0.5,C(room_type)[T.Hotel room],0.32501634116852074,0.0
+0.5,C(room_type)[T.Private room],-0.7296513763196657,0.0
+0.5,C(room_type)[T.Shared room],-1.4410710177484773,0.0
+0.5,accommodates,0.11947142443341363,0.0
+0.5,C(city)[T.chicago]:accommodates,-0.03863548591544941,0.0
+0.5,C(city)[T.losangeles]:accommodates,-0.11296281952434128,0.0
+0.5,C(city)[T.nashville]:accommodates,-0.08577292105366041,0.0
+0.5,C(city)[T.neworleans]:accommodates,-0.01484154954027872,0.0
+0.5,C(city)[T.newyork]:accommodates,-0.08991745662632411,0.0
+0.5,availability_365,1.197972006317105e-09,0.9968719706223539
+0.5,number_of_reviews,-1.6322029249005165e-09,0.9970951521523332
+0.5,amenities_count,0.0003828483331744792,0.0
+0.5,C(city)[T.chicago]:amenities_count,0.002890295843826607,0.0
+0.5,C(city)[T.losangeles]:amenities_count,-0.00038282969580905046,0.0
+0.5,C(city)[T.nashville]:amenities_count,0.0005286181876726914,0.0
+0.5,C(city)[T.neworleans]:amenities_count,-0.0003828396256722044,1.2994491074186058e-183
+0.5,C(city)[T.newyork]:amenities_count,2.4626469894428737e-05,0.00833494921352028
+0.5,price_per_person,0.0005360268363976128,0.0
+0.75,Intercept,4.450210973002811,0.0
+0.75,C(city)[T.chicago],0.04564257378501679,6.076867482915123e-42
+0.75,C(city)[T.losangeles],0.2409266965108543,0.0
+0.75,C(city)[T.nashville],0.09337842806030494,6.05304789495267e-143
+0.75,C(city)[T.neworleans],0.0198663971282258,1.233585939922516e-07
+0.75,C(city)[T.newyork],-0.049142662200154064,8.564329905782184e-89
+0.75,C(room_type)[T.Hotel room],0.07334089528704624,2.3426234246309812e-38
+0.75,C(room_type)[T.Private room],-0.6102251472165392,0.0
+0.75,C(room_type)[T.Shared room],-1.198060262302107,0.0
+0.75,accommodates,0.14748075502350844,0.0
+0.75,C(city)[T.chicago]:accommodates,-0.026804145572398852,0.0
+0.75,C(city)[T.losangeles]:accommodates,-0.09779415212066667,0.0
+0.75,C(city)[T.nashville]:accommodates,-0.06005019859226479,0.0
+0.75,C(city)[T.neworleans]:accommodates,-0.023700794694931915,0.0
+0.75,C(city)[T.newyork]:accommodates,0.021285208976681957,0.0
+0.75,availability_365,4.7162078875145896e-05,5.2359633438476797e-154
+0.75,number_of_reviews,-5.654476257804797e-06,0.0355605429557575
+0.75,amenities_count,-0.0023291874056190487,0.0
+0.75,C(city)[T.chicago]:amenities_count,0.004121510107832904,0.0
+0.75,C(city)[T.losangeles]:amenities_count,0.002460572710933473,0.0
+0.75,C(city)[T.nashville]:amenities_count,0.002775323407323782,4.9253894048568206e-282
+0.75,C(city)[T.neworleans]:amenities_count,0.0021466374807777022,3.417493196725461e-149
+0.75,C(city)[T.newyork]:amenities_count,0.006914318613866044,0.0
+0.75,price_per_person,0.00500797174268444,0.0
