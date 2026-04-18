@@ -248,6 +248,34 @@ def _load() -> dict:
         if pd.isna(median_price):
             row["median_price"] = round(city_price_fallback[city]["median_price"], 2)
 
+    # Keep city price KPIs aligned with modeling inputs by taking price center from
+    # each city's featured dataset when available.
+    featured_price_stats: dict[str, dict[str, float]] = {}
+    for city in CITY_KEYS:
+        featured_path = PROCESSED / f"{city}_featured.csv"
+        if not featured_path.exists():
+            continue
+        try:
+            fdf = pd.read_csv(featured_path, usecols=["price"])
+            fdf["price"] = pd.to_numeric(fdf["price"], errors="coerce")
+            fdf = fdf[fdf["price"] > 0]
+            if fdf.empty:
+                continue
+            featured_price_stats[city] = {
+                "avg_price": float(fdf["price"].mean()),
+                "median_price": float(fdf["price"].median()),
+            }
+        except Exception:
+            continue
+
+    for row in d.get("calendar", []):
+        city = str(row.get("city", "")).strip()
+        stats = featured_price_stats.get(city)
+        if not stats:
+            continue
+        row["avg_price"] = round(stats["avg_price"], 2)
+        row["median_price"] = round(stats["median_price"], 2)
+
     return d
 
 
