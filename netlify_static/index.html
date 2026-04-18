@@ -376,7 +376,6 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
   <div class="sn-dot active" data-sec="hero"     data-label="Overview"></div>
   <div class="sn-dot"        data-sec="profile"  data-label="City Profile"></div>
   <div class="sn-dot"        data-sec="predict"  data-label="Predictor"></div>
-  <div class="sn-dot"        data-sec="progress" data-label="Model Journey"></div>
   <div class="sn-dot"        data-sec="compare"  data-label="Comparison"></div>
   <div class="sn-dot"        data-sec="shap"     data-label="Pricing Drivers"></div>
   <div class="sn-dot"        data-sec="cluster"  data-label="Clusters"></div>
@@ -639,34 +638,11 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
   </div>
 </section>
 
-<!-- ── MODEL PROGRESSION ─────────────────────────────── -->
-<section id="progress">
-  <div class="wrap">
-    <div class="sec-head reveal">
-      <span class="sec-num">03</span>
-      <div><h2>Model Progression</h2>
-      <div class="sec-sub">Transparent view of performance evolution from baseline to enhanced grouped-split modeling</div></div>
-    </div>
-    <div class="g2 reveal">
-      <div class="card">
-        <div class="card-title">R2 Progression by Stage</div>
-        <div class="card-desc">Stage 0: baseline saved metrics · Stage 1: enhanced random split · Stage 2: grouped split by listing_id</div>
-        <div class="ch" id="chartProgressionR2"></div>
-      </div>
-      <div class="card reveal-d1">
-        <div class="card-title">Progression Table</div>
-        <div class="card-desc">Per-city delta from baseline retained for auditability in final report</div>
-        <div style="overflow-x:auto"><table id="progressTable" style="width:100%;border-collapse:collapse;font-size:12px"></table></div>
-      </div>
-    </div>
-  </div>
-</section>
-
 <!-- ── CROSS-CITY COMPARISON ─────────────────────────── -->
 <section id="compare">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">04</span>
+      <span class="sec-num">03</span>
       <div><h2>Cross-City Comparison</h2>
       <div class="sec-sub">Click a city above — selected city is spotlit across all charts</div></div>
     </div>
@@ -701,7 +677,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="shap">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">05</span>
+      <span class="sec-num">04</span>
       <div><h2>Pricing Drivers</h2>
       <div class="sec-sub">SHAP feature importance · rank 1 = strongest driver · 6 cities × top-5 features</div></div>
     </div>
@@ -729,7 +705,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="cluster">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">06</span>
+      <span class="sec-num">05</span>
       <div><h2>Listing Clusters &amp; Host Archetypes</h2>
       <div class="sec-sub">4 pooled K-Means clusters · 3 host strategy archetypes</div></div>
     </div>
@@ -753,7 +729,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="signif">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">07</span>
+      <span class="sec-num">06</span>
       <div><h2>Significant Results</h2>
       <div class="sec-sub">Statistically important visuals from the latest runs: full-data SHAP beeswarm and host-strategy silhouette scan</div></div>
     </div>
@@ -781,7 +757,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="spatial">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">08</span>
+      <span class="sec-num">07</span>
       <div><h2>Spatial Analysis</h2>
       <div class="sec-sub">Neighbourhood price leaders · Moran's I spatial autocorrelation · interactive maps</div></div>
     </div>
@@ -822,7 +798,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="calendar">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">09</span>
+      <span class="sec-num">08</span>
       <div><h2>Calendar &amp; Temporal Trends</h2>
       <div class="sec-sub">Forward-looking availability rates · seasonal demand pressure</div></div>
     </div>
@@ -855,7 +831,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="stats">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">10</span>
+      <span class="sec-num">09</span>
       <div><h2>Statistical Testing</h2>
       <div class="sec-sub">Mann-Whitney U pairwise tests · Benjamini-Hochberg correction · all 15 city pairs</div></div>
     </div>
@@ -1007,7 +983,7 @@ const obs=new IntersectionObserver(entries=>{
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
 // ── SECTION NAV ──────────────────────────────────────────────────────
-const secs=['hero','profile','predict','progress','compare','shap','cluster','signif','spatial','calendar','stats'];
+const secs=['hero','profile','predict','compare','shap','cluster','signif','spatial','calendar','stats'];
 const secObs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{
     if(e.isIntersecting){
@@ -1042,7 +1018,6 @@ function setAccent(city){
 function initializeDashboard(){
   buildCityCards();
   buildPredictorSection();
-  buildProgressionSection();
   buildCompareCharts();
   buildSHAPCharts();
   buildClusterCharts();
@@ -1064,7 +1039,6 @@ if (DATA) {
       DATA=d;
       buildCityCards();
       buildPredictorSection();
-      buildProgressionSection();
       buildCompareCharts();
       buildSHAPCharts();
       buildClusterCharts();
