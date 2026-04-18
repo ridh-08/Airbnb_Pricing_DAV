@@ -23,6 +23,9 @@ outputs/validation/
 
 # Local-only notes/instructions
 instructions.py
+.tmp_*.py
+pipeline_run*.log
+pipeline_debug*.log
 
 # Raw data folders (will be pushed separately)
 Austin/calendar.csv/

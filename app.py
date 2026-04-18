@@ -27,14 +27,7 @@ DATA_QUALITY_ISSUES: dict[str, str] = {
 }
 
 def _filter_training_frame(work, price_col: str = "price"):
-    """Apply the same $10k absolute cap used in the cleaned preprocessing.
-
-    Called inside _build_predictor_cache after the DataFrame is loaded
-    and numeric-coerced, BEFORE train/test split. Mirrors
-    src/data_quality_filter.apply_price_artefact_filter() so a
-    dashboard-only deploy without the patched src/ still gets clean
-    training data.
-    """
+    """Filter unrealistic price values before model training."""
     import pandas as pd
 
     work = work[work[price_col] > 0]
@@ -58,6 +51,113 @@ def _read(path: Path) -> list[dict]:
         return []
 
 
+def _read_city_table_bundle(filename_template: str) -> list[dict]:
+    rows: list[dict] = []
+    for city in CITY_KEYS:
+        path = OUTPUTS / city / "tables" / filename_template.format(city=city)
+        if not path.exists():
+            continue
+        try:
+            df = pd.read_csv(path)
+            if "city" not in df.columns:
+                df["city"] = city
+            rows.extend(df.to_dict("records"))
+        except Exception:
+            continue
+    return rows
+
+
+def _load_shap_from_city_files() -> tuple[list[dict], list[dict]]:
+    shap_rows: list[dict] = []
+    dominance_rows: list[dict] = []
+
+    for city in CITY_KEYS:
+        path = OUTPUTS / city / "tables" / f"{city}_xgboost_shap_summary.csv"
+        if not path.exists():
+            continue
+
+        try:
+            df = pd.read_csv(path)
+        except Exception:
+            continue
+
+        if "feature" not in df.columns:
+            continue
+
+        if "mean_abs_shap" not in df.columns:
+            candidate = [c for c in df.columns if "shap" in c.lower()]
+            if candidate:
+                df = df.rename(columns={candidate[0]: "mean_abs_shap"})
+
+        if "mean_abs_shap" not in df.columns:
+            continue
+
+        top = df.sort_values("mean_abs_shap", ascending=False).head(5).reset_index(drop=True)
+        top["rank"] = top.index + 1
+
+        for _, row in top.iterrows():
+            shap_rows.append(
+                {
+                    "city": city,
+                    "feature": str(row["feature"]),
+                    "mean_abs_shap": float(row["mean_abs_shap"]),
+                    "rank": int(row["rank"]),
+                }
+            )
+
+        total = float(top["mean_abs_shap"].sum()) if len(top) else 0.0
+        if total <= 0:
+            continue
+
+        amen = top[top["feature"] == "amenities_count"]
+        neigh = top[top["feature"].astype(str).str.startswith("neigh_")]
+        top_row = top.iloc[0]
+        amen_val = float(amen.iloc[0]["mean_abs_shap"]) if not amen.empty else 0.0
+        amen_rank = int(amen.iloc[0]["rank"]) if not amen.empty else None
+        neigh_val = float(neigh["mean_abs_shap"].sum()) if not neigh.empty else 0.0
+
+        dominance_rows.append(
+            {
+                "city": city,
+                "top_feature": str(top_row["feature"]),
+                "top_value": float(top_row["mean_abs_shap"]),
+                "amenities_value": amen_val,
+                "amenities_rank": amen_rank,
+                "amenities_share_pct": 100.0 * amen_val / total,
+                "neighbourhood_share_pct": 100.0 * neigh_val / total,
+            }
+        )
+
+    return shap_rows, dominance_rows
+
+
+def _coerce_wide_shap_table(records: list[dict]) -> list[dict]:
+    if not records:
+        return []
+    first = records[0]
+    if "city" in first and "feature" in first:
+        return records
+    if "rank" not in first:
+        return []
+
+    rows: list[dict] = []
+    for rec in records:
+        rank = int(rec.get("rank", 0) or 0)
+        for city in CITY_KEYS:
+            feature = rec.get(city)
+            if not feature:
+                continue
+            rows.append(
+                {
+                    "city": city,
+                    "feature": str(feature),
+                    "mean_abs_shap": float(max(1, 6 - rank)),
+                    "rank": rank,
+                }
+            )
+    return rows
+
+
 def _load_host_clusters(outputs: Path) -> list[dict]:
     """Return cleaned cluster summary if present, else the original."""
     cleaned = outputs / "cleaned" / "cleaned_host_clusters.csv"
@@ -77,7 +177,7 @@ def _load() -> dict:
     d["r2"]             = _read(OUTPUTS / "multi_city/tables/xgboost_city_metrics.csv")
     d["xgb_progression"] = _read(OUTPUTS / "multi_city/tables/xgboost_progression_history.csv")
     d["xgb_tuning"]      = _read(OUTPUTS / "multi_city/tables/xgboost_tuning_summary.csv")
-    d["shap"]           = _read(OUTPUTS / "multi_city/tables/shap_top5_features_by_city.csv")
+    d["shap"]           = _coerce_wide_shap_table(_read(OUTPUTS / "multi_city/tables/shap_top5_features_by_city.csv"))
     d["shap_dominance"] = _read(OUTPUTS / "multi_city/tables/shap_city_dominance_checks.csv")
     d["cross_tests"]    = _read(OUTPUTS / "multi_city/tables/cross_city_tests.csv")
     d["host_clusters"]  = _load_host_clusters(OUTPUTS)
@@ -86,6 +186,19 @@ def _load() -> dict:
     d["calendar"]       = _read(OUTPUTS / "tables/calendar_summary.csv")
     d["spatial"]        = _read(OUTPUTS / "tables/spatial_summary.csv")
     d["fixed_effects"]  = _read(OUTPUTS / "multi_city/tables/pooled_fixed_effects.csv")
+
+    if not d["calendar"]:
+        d["calendar"] = _read_city_table_bundle("calendar_summary_{city}.csv")
+    if not d["spatial"]:
+        d["spatial"] = _read_city_table_bundle("spatial_summary_{city}.csv")
+    if not d["shap"]:
+        shap_rows, shap_dom = _load_shap_from_city_files()
+        d["shap"] = shap_rows
+        if not d["shap_dominance"]:
+            d["shap_dominance"] = shap_dom
+    elif not d["shap_dominance"]:
+        _, shap_dom = _load_shap_from_city_files()
+        d["shap_dominance"] = shap_dom
     city_price_fallback: dict[str, dict[str, float]] = {}
     try:
         df = pd.read_csv(OUTPUTS / "tables/calendar_temporal_summary.csv")
@@ -108,7 +221,19 @@ def _load() -> dict:
                 "median_price": float(row.get("median_price", 0.0) or 0.0),
             }
     except Exception:
-        d["calendar_monthly"] = []
+        fallback_temporal = _read_city_table_bundle("calendar_temporal_summary_{city}.csv")
+        if fallback_temporal:
+            df = pd.DataFrame(fallback_temporal)
+            if {"city", "month_num", "month", "avg_price", "availability_rate"}.issubset(df.columns):
+                monthly = (
+                    df.groupby(["city", "month_num", "month"])[["avg_price", "availability_rate"]]
+                    .mean().reset_index().sort_values(["city", "month_num"])
+                )
+                d["calendar_monthly"] = monthly.to_dict("records")
+            else:
+                d["calendar_monthly"] = []
+        else:
+            d["calendar_monthly"] = []
 
     for row in d.get("calendar", []):
         city = str(row.get("city", "")).strip()
@@ -127,12 +252,7 @@ def _load() -> dict:
 
 
 def _build_city_cards() -> list[dict[str, Any]]:
-    """Build city overview cards with data-quality flags.
-
-    REPLACE the original _build_city_cards() with this version. The
-    signature here takes dependencies as args for testability; in app.py
-    they are module-level globals so remove the args accordingly.
-    """
+    """Build city overview cards with data-quality flags."""
     cards: list[dict[str, Any]] = []
     for city in CITY_KEYS:
         cal = next((r for r in DATA.get("calendar", []) if r.get("city") == city), {})
@@ -170,19 +290,7 @@ def _build_predictor_meta() -> dict[str, dict[str, Any]]:
 
 def _build_predictor_cache() -> dict[str, dict[str, Any]]:
     """Train lightweight city-level XGBoost models for interactive dashboard scenarios."""
-    PREDICTOR_LOOP_PATCH = """
-        # Skip cities with known upstream data-quality issues.
-        if city in DATA_QUALITY_ISSUES:
-            continue
 
-        work = work.dropna(subset=required)
-        # NEW: $10k absolute cap and 10x-median relative cap before
-        # fitting. Keeps predictor outputs within realistic bounds even
-        # if the upstream processed CSV still has placeholder rows.
-        work = _filter_training_frame(work)
-        if len(work) < 200:
-            continue
-"""
     try:
         from xgboost import XGBRegressor
     except Exception:
@@ -413,42 +521,37 @@ def api_predict_meta():
 
 @app.route("/api/predict/<city>", methods=["POST"])
 def api_predict_city(city: str):
-    if city not in PREDICTORS:
-        return jsonify({"error": "City model unavailable"}), 404
-
-    payload = request.get_json(silent=True) or {}
-    result = _predict_price(city, payload)
-    if result is None:
-        return jsonify({"error": "Prediction failed"}), 400
-    return jsonify(result)
-PREDICT_ENDPOINT_PATCH = """
-@app.route("/api/predict/<city>", methods=["POST"])
-def api_predict_city(city: str):
     city_norm = _normalize_city_key(city)
     if city_norm in DATA_QUALITY_ISSUES:
         return (
-            jsonify({
-                "error": "predictor_unavailable",
-                "city": city_norm,
-                "reason": DATA_QUALITY_ISSUES[city_norm],
-            }),
-            409,  # Conflict — the resource exists but is in an unusable state
+            jsonify(
+                {
+                    "error": "predictor_unavailable",
+                    "city": city_norm,
+                    "reason": DATA_QUALITY_ISSUES[city_norm],
+                }
+            ),
+            409,
         )
+
+    if city_norm not in PREDICTORS:
+        return jsonify({"error": "City model unavailable"}), 404
+
     payload = request.get_json(silent=True) or {}
     result = _predict_price(city_norm, payload)
     if result is None:
-        return jsonify({"error": "city_model_unavailable", "city": city_norm}), 404
+        return jsonify({"error": "Prediction failed"}), 400
     return jsonify(result)
-"""
 
 
 @app.route("/api/predict/sweep/<city>", methods=["POST"])
 def api_predict_sweep(city: str):
-    if city not in PREDICTORS:
+    city_norm = _normalize_city_key(city)
+    if city_norm not in PREDICTORS:
         return jsonify({"error": "City model unavailable"}), 404
 
     payload = request.get_json(silent=True) or {}
-    result = _predict_sweep(city, payload)
+    result = _predict_sweep(city_norm, payload)
     if result is None:
         return jsonify({"error": "Sweep failed"}), 400
     return jsonify(result)
@@ -460,7 +563,9 @@ def serve_map(city: str, map_type: str):
         abort(404)
     if map_type not in {"choropleth","cluster"}: abort(404)
     suffix = "price_choropleth" if map_type=="choropleth" else "cluster_map"
-    path = OUTPUTS / f"plots/{city_key}_{suffix}.html"
+    path = OUTPUTS / city_key / "plots" / f"{city_key}_{suffix}.html"
+    if not path.exists():
+        path = OUTPUTS / "plots" / f"{city_key}_{suffix}.html"
     if not path.exists(): abort(404)
     return send_file(path)
 
