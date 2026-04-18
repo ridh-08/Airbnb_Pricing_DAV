@@ -126,6 +126,34 @@ h1 mark::after{content:'';position:absolute;bottom:-2px;left:0;right:0;
 .cc-price{font-family:var(--fm);font-size:18px;font-weight:700;
   color:var(--cc,#fff);opacity:.9;margin-bottom:2px}
 .cc-r2{font-family:var(--fm);font-size:11px;color:var(--muted);letter-spacing:.05em}
+.cc-badge {
+  display: inline-block;
+  font-family: var(--fm);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fff4e5;
+  color: #b7570a;
+  border: 1px solid #f3c28a;
+}
+.city-card[data-disabled="true"] {
+  opacity: 0.72;
+  cursor: not-allowed;
+}
+.city-card[data-disabled="true"]:hover:not(.active) {
+  transform: none;
+  border-color: var(--b1);
+}
+.cc-issue {
+  font-family: var(--fm);
+  font-size: 10px;
+  color: #b7570a;
+  margin-top: 6px;
+  line-height: 1.3;
+}
 .cc-bar{height:2px;background:var(--dim);border-radius:1px;margin-top:12px;overflow:hidden}
 .cc-bar-fill{height:100%;border-radius:1px;background:var(--cc,#666);
   transition:width .6s cubic-bezier(.4,0,.2,1)}
@@ -239,6 +267,15 @@ h2{font-family:var(--fh);font-size:20px;font-weight:700;letter-spacing:-.01em}
 .arch-key{font-size:11px;color:var(--muted)}
 .arch-v{font-family:var(--fm);font-size:12px;font-weight:500}
 
+/* ── SIGNIFICANT RESULTS ──────────────────────────────── */
+.sig-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:20px}
+@media(max-width:900px){.sig-grid{grid-template-columns:1fr}}
+.beeswarm-wrap{background:var(--card);border:1px solid var(--b1);border-radius:var(--r);padding:16px}
+.beeswarm-head{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:12px}
+.beeswarm-city{font-family:var(--fm);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+.beeswarm-img{width:100%;height:auto;border-radius:10px;border:1px solid var(--b1);background:#fff}
+.beeswarm-note{font-size:11px;color:var(--muted);margin-top:10px}
+
 /* ── SPATIAL ───────────────────────────────────────────── */
 .spatial-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:24px}
 @media(max-width:900px){.spatial-grid{grid-template-columns:repeat(2,1fr)}}
@@ -343,6 +380,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
   <div class="sn-dot"        data-sec="compare"  data-label="Comparison"></div>
   <div class="sn-dot"        data-sec="shap"     data-label="Pricing Drivers"></div>
   <div class="sn-dot"        data-sec="cluster"  data-label="Clusters"></div>
+  <div class="sn-dot"        data-sec="signif"   data-label="Significant"></div>
   <div class="sn-dot"        data-sec="spatial"  data-label="Spatial"></div>
   <div class="sn-dot"        data-sec="calendar" data-label="Calendar"></div>
   <div class="sn-dot"        data-sec="stats"    data-label="Statistics"></div>
@@ -367,11 +405,27 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
       <div class="cs-label">Select a city to explore</div>
       <div class="cs-row" id="csRow">
         {% for card in city_cards %}
-        <button class="city-card" data-city="{{ card.city }}" style="--cc:{{ card.color }}">
-          <div class="cc-name">{{ card.label }}</div>
+        <button
+          class="city-card"
+          data-city="{{ card.city }}"
+          data-disabled="{{ 'true' if card.data_quality_issue else 'false' }}"
+          style="--cc:{{ card.color }}"
+          {% if card.data_quality_issue %}title="{{ card.data_quality_issue }}"{% endif %}
+        >
+          <div class="cc-name">
+            {{ card.label }}
+            {% if card.data_quality_issue %}
+              <span class="cc-badge">data issue</span>
+            {% endif %}
+          </div>
           <div class="cc-price">{% if card.median_price %}${{ card.median_price | round(0) | int }}{% else %}—{% endif %}</div>
-          <div class="cc-r2">R² {{ '%.3f'|format(card.r2) }} · {{ (card.availability_rate * 100) | round(0) | int }}% avail</div>
-          <div class="cc-bar"><div class="cc-bar-fill" style="width:{{ (card.r2 * 100) | round(1) }}%"></div></div>
+          {% if card.data_quality_issue %}
+            <div class="cc-issue">predictor unavailable · see report §5.14</div>
+            <div class="cc-bar"><div class="cc-bar-fill" style="width:0%"></div></div>
+          {% else %}
+            <div class="cc-r2">R² {{ '%.3f'|format(card.r2) }} · {{ (card.availability_rate * 100) | round(0) | int }}% avail</div>
+            <div class="cc-bar"><div class="cc-bar-fill" style="width:{{ (card.r2 * 100) | round(1) }}%"></div></div>
+          {% endif %}
         </button>
         {% endfor %}
       </div>
@@ -608,11 +662,39 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
   </div>
 </section>
 
+<!-- ── SIGNIFICANT RESULTS ───────────────────────────── -->
+<section id="signif">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">07</span>
+      <div><h2>Significant Results</h2>
+      <div class="sec-sub">Statistically important visuals from the latest runs: full-data SHAP beeswarm and host-strategy silhouette scan</div></div>
+    </div>
+    <div class="sig-grid reveal">
+      <div class="beeswarm-wrap">
+        <div class="beeswarm-head">
+          <div>
+            <div class="card-title" style="margin-bottom:2px">City SHAP Beeswarm (Top 10)</div>
+            <div class="beeswarm-city" id="beeswarmCityLabel">NEW YORK</div>
+          </div>
+        </div>
+        <img id="beeswarmImage" class="beeswarm-img" alt="SHAP beeswarm plot" />
+        <div class="beeswarm-note">This plot updates when you change city from the selector above.</div>
+      </div>
+      <div class="card reveal-d1">
+        <div class="card-title">Host Strategy Silhouette Scan</div>
+        <div class="card-desc">Optimal k selected by highest silhouette score in pooled host-strategy clustering</div>
+        <div class="ch" id="chartHostSilhouette"></div>
+      </div>
+    </div>
+  </div>
+</section>
+
 <!-- ── SPATIAL ────────────────────────────────────────── -->
 <section id="spatial">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">07</span>
+      <span class="sec-num">08</span>
       <div><h2>Spatial Analysis</h2>
       <div class="sec-sub">Neighbourhood price leaders · Moran's I spatial autocorrelation · interactive maps</div></div>
     </div>
@@ -653,7 +735,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="calendar">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">08</span>
+      <span class="sec-num">09</span>
       <div><h2>Calendar &amp; Temporal Trends</h2>
       <div class="sec-sub">Forward-looking availability rates · seasonal demand pressure</div></div>
     </div>
@@ -686,7 +768,7 @@ footer{padding:36px 0;text-align:center;font-family:var(--fm);font-size:11px;
 <section id="stats">
   <div class="wrap">
     <div class="sec-head reveal">
-      <span class="sec-num">09</span>
+      <span class="sec-num">10</span>
       <div><h2>Statistical Testing</h2>
       <div class="sec-sub">Mann-Whitney U pairwise tests · Benjamini-Hochberg correction · all 15 city pairs</div></div>
     </div>
@@ -838,7 +920,7 @@ const obs=new IntersectionObserver(entries=>{
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
 // ── SECTION NAV ──────────────────────────────────────────────────────
-const secs=['hero','profile','predict','progress','compare','shap','cluster','spatial','calendar','stats'];
+const secs=['hero','profile','predict','progress','compare','shap','cluster','signif','spatial','calendar','stats'];
 const secObs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{
     if(e.isIntersecting){
@@ -877,6 +959,7 @@ function initializeDashboard(){
   buildCompareCharts();
   buildSHAPCharts();
   buildClusterCharts();
+  buildSignificantSection();
   buildSpatialSection();
   buildCalendarSection();
   buildStatsSection();
@@ -898,6 +981,7 @@ if (DATA) {
       buildCompareCharts();
       buildSHAPCharts();
       buildClusterCharts();
+      buildSignificantSection();
       buildSpatialSection();
       buildCalendarSection();
       buildStatsSection();
@@ -945,6 +1029,12 @@ function selectCity(city,init=false){
     console.warn('SHAP update failed for city switch:', cityKey, err);
   }
 
+  try {
+    updateBeeswarmImage(cityKey);
+  } catch (err) {
+    console.warn('Beeswarm update failed for city switch:', cityKey, err);
+  }
+
   // spotlight charts
   if(!init){
     try {
@@ -965,7 +1055,13 @@ function buildCityCards(){
   row.querySelectorAll('.city-card').forEach(card=>{
     if(!card.dataset.bound){
       card.dataset.bound='1';
-      card.addEventListener('click',()=>selectCity(card.dataset.city));
+      card.addEventListener('click',(e)=>{
+        if(card.dataset.disabled==='true'){
+          e.preventDefault();
+          return;
+        }
+        selectCity(card.dataset.city);
+      });
     }
   });
   if(row.children.length) return;
@@ -986,6 +1082,63 @@ function buildCityCards(){
     card.addEventListener('click',()=>selectCity(city));
     row.appendChild(card);
   });
+}
+
+function beeswarmImageUrl(city){
+  const cityKey=String(city||'').toLowerCase().replace(/[\s_-]+/g,'');
+  const filename=`${cityKey}_xgboost_shap_beeswarm_top10.png`;
+  return HAS_API
+    ? apiUrl(`/plot/${cityKey}/${filename}`)
+    : `./plots/${filename}`;
+}
+
+function buildSignificantSection(){
+  updateBeeswarmImage(selectedCity);
+  buildHostSilhouetteChart();
+}
+
+function updateBeeswarmImage(city){
+  const cityKey=String(city||'').toLowerCase().replace(/[\s_-]+/g,'');
+  const img=document.getElementById('beeswarmImage');
+  const label=document.getElementById('beeswarmCityLabel');
+  if(!img||!label) return;
+  label.textContent=(CL[cityKey]||cityKey).toUpperCase();
+  img.src=beeswarmImageUrl(cityKey);
+  img.onerror=()=>{
+    img.alt='SHAP beeswarm plot not found';
+  };
+}
+
+function buildHostSilhouetteChart(){
+  const rows=Array.isArray(DATA.host_silhouette) ? DATA.host_silhouette : [];
+  if(!rows.length){
+    Plotly.purge('chartHostSilhouette');
+    return;
+  }
+  const best=rows.reduce((acc,row)=>Number(row.silhouette)>Number(acc.silhouette)?row:acc,rows[0]);
+  Plotly.newPlot('chartHostSilhouette',[{
+    type:'scatter',
+    mode:'lines+markers+text',
+    x:rows.map(r=>Number(r.k)),
+    y:rows.map(r=>Number(r.silhouette)),
+    text:rows.map(r=>Number(r.k)===Number(best.k)?'best k':''),
+    textposition:'top center',
+    line:{color:'#e85d3b',width:2.5},
+    marker:{size:8,color:rows.map(r=>Number(r.k)===Number(best.k)?'#e85d3b':'#4e6589')},
+    hovertemplate:'k=%{x}<br>silhouette=%{y:.3f}<extra></extra>',
+  }],{...BASE,
+    margin:{t:8,r:8,b:44,l:55},
+    xaxis:{...BASE.xaxis,title:{text:'Number of clusters (k)',font:{size:10,color:'#4e6589'}},dtick:1},
+    yaxis:{...BASE.yaxis,title:{text:'Silhouette score',font:{size:10,color:'#4e6589'}}},
+    shapes:[{
+      type:'line',
+      x0:Number(best.k),
+      x1:Number(best.k),
+      y0:Math.min(...rows.map(r=>Number(r.silhouette))) - 0.01,
+      y1:Number(best.silhouette),
+      line:{color:'#e85d3b',width:1.5,dash:'dot'},
+    }],
+  },CFG);
 }
 
 // ── PREDICTOR ───────────────────────────────────────────────────────

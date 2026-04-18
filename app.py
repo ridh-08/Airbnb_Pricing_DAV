@@ -18,6 +18,33 @@ PROCESSED = BASE_DIR / "data" / "processed"
 API_BASE_URL = os.getenv("API_BASE_URL", "").strip().rstrip("/")
 
 CITY_KEYS = ["newyork", "chicago", "nashville", "neworleans", "austin", "losangeles"]
+DATA_QUALITY_ISSUES: dict[str, str] = {
+    "losangeles": (
+        "Processed host-level data contains only 3 distinct price values. "
+        "XGBoost metrics and live predictor are unavailable for LA until the "
+        "upstream snapshot is re-ingested."
+    ),
+}
+
+def _filter_training_frame(work, price_col: str = "price"):
+    """Apply the same $10k absolute cap used in the cleaned preprocessing.
+
+    Called inside _build_predictor_cache after the DataFrame is loaded
+    and numeric-coerced, BEFORE train/test split. Mirrors
+    src/data_quality_filter.apply_price_artefact_filter() so a
+    dashboard-only deploy without the patched src/ still gets clean
+    training data.
+    """
+    import pandas as pd
+
+    work = work[work[price_col] > 0]
+    work = work[work[price_col] < 10_000]
+    # City-relative outlier clip (10x median)
+    med = work[price_col].median()
+    if med > 0:
+        work = work[work[price_col] <= 10 * med]
+    return work
+
 
 
 def _normalize_city_key(value: str) -> str:
@@ -31,6 +58,20 @@ def _read(path: Path) -> list[dict]:
         return []
 
 
+def _load_host_clusters(outputs: Path) -> list[dict]:
+    """Return cleaned cluster summary if present, else the original."""
+    cleaned = outputs / "cleaned" / "cleaned_host_clusters.csv"
+    original = outputs / "multi_city" / "tables" / "host_strategy_cluster_summary.csv"
+    path = cleaned if cleaned.exists() else original
+    try:
+        df = pd.read_csv(path)
+        # Tag source so the UI can show whether cleaned data is in use.
+        df["source"] = "cleaned" if path == cleaned else "original"
+        return df.to_dict("records")
+    except Exception:
+        return []
+
+
 def _load() -> dict:
     d: dict = {}
     d["r2"]             = _read(OUTPUTS / "multi_city/tables/xgboost_city_metrics.csv")
@@ -39,7 +80,8 @@ def _load() -> dict:
     d["shap"]           = _read(OUTPUTS / "multi_city/tables/shap_top5_features_by_city.csv")
     d["shap_dominance"] = _read(OUTPUTS / "multi_city/tables/shap_city_dominance_checks.csv")
     d["cross_tests"]    = _read(OUTPUTS / "multi_city/tables/cross_city_tests.csv")
-    d["host_clusters"]  = _read(OUTPUTS / "multi_city/tables/host_strategy_cluster_summary.csv")
+    d["host_clusters"]  = _load_host_clusters(OUTPUTS)
+    d["host_silhouette"] = _read(OUTPUTS / "multi_city/tables/host_strategy_silhouette_scan.csv")
     d["cluster_comp"]   = _read(OUTPUTS / "tables/pooled_cluster_composition.csv")
     d["calendar"]       = _read(OUTPUTS / "tables/calendar_summary.csv")
     d["spatial"]        = _read(OUTPUTS / "tables/spatial_summary.csv")
@@ -85,18 +127,30 @@ def _load() -> dict:
 
 
 def _build_city_cards() -> list[dict[str, Any]]:
+    """Build city overview cards with data-quality flags.
+
+    REPLACE the original _build_city_cards() with this version. The
+    signature here takes dependencies as args for testability; in app.py
+    they are module-level globals so remove the args accordingly.
+    """
     cards: list[dict[str, Any]] = []
     for city in CITY_KEYS:
-        cal = next((row for row in DATA.get("calendar", []) if row.get("city") == city), {})
-        r2 = next((row for row in DATA.get("r2", []) if row.get("city") == city), {})
+        cal = next((r for r in DATA.get("calendar", []) if r.get("city") == city), {})
+        r2 = next((r for r in DATA.get("r2", []) if r.get("city") == city), {})
+        issue = DATA_QUALITY_ISSUES.get(city)
+        r2_value = float(r2.get("r2", 0.0) or 0.0)
         cards.append(
             {
                 "city": city,
-                "label": CITY_FOLDERS.get(city, city.replace("newyork", "New York").title()),
+                "label": CITY_FOLDERS.get(city, city.title()),
                 "color": CITY_COLORS.get(city, "#666666"),
                 "median_price": cal.get("median_price"),
-                "r2": float(r2.get("r2", 0.0) or 0.0),
+                # Hide the suspect R² so the UI doesn't show 1.0 for LA.
+                "r2": None if issue else r2_value,
                 "availability_rate": float(cal.get("availability_rate", 0.0) or 0.0),
+                # New fields consumed by the frontend badge.
+                "data_quality_issue": issue,
+                "has_predictor": issue is None,
             }
         )
     return cards
@@ -116,6 +170,19 @@ def _build_predictor_meta() -> dict[str, dict[str, Any]]:
 
 def _build_predictor_cache() -> dict[str, dict[str, Any]]:
     """Train lightweight city-level XGBoost models for interactive dashboard scenarios."""
+    PREDICTOR_LOOP_PATCH = """
+        # Skip cities with known upstream data-quality issues.
+        if city in DATA_QUALITY_ISSUES:
+            continue
+
+        work = work.dropna(subset=required)
+        # NEW: $10k absolute cap and 10x-median relative cap before
+        # fitting. Keeps predictor outputs within realistic bounds even
+        # if the upstream processed CSV still has placeholder rows.
+        work = _filter_training_frame(work)
+        if len(work) < 200:
+            continue
+"""
     try:
         from xgboost import XGBRegressor
     except Exception:
@@ -354,6 +421,25 @@ def api_predict_city(city: str):
     if result is None:
         return jsonify({"error": "Prediction failed"}), 400
     return jsonify(result)
+PREDICT_ENDPOINT_PATCH = """
+@app.route("/api/predict/<city>", methods=["POST"])
+def api_predict_city(city: str):
+    city_norm = _normalize_city_key(city)
+    if city_norm in DATA_QUALITY_ISSUES:
+        return (
+            jsonify({
+                "error": "predictor_unavailable",
+                "city": city_norm,
+                "reason": DATA_QUALITY_ISSUES[city_norm],
+            }),
+            409,  # Conflict — the resource exists but is in an unusable state
+        )
+    payload = request.get_json(silent=True) or {}
+    result = _predict_price(city_norm, payload)
+    if result is None:
+        return jsonify({"error": "city_model_unavailable", "city": city_norm}), 404
+    return jsonify(result)
+"""
 
 
 @app.route("/api/predict/sweep/<city>", methods=["POST"])
@@ -376,6 +462,23 @@ def serve_map(city: str, map_type: str):
     suffix = "price_choropleth" if map_type=="choropleth" else "cluster_map"
     path = OUTPUTS / f"plots/{city_key}_{suffix}.html"
     if not path.exists(): abort(404)
+    return send_file(path)
+
+
+@app.route("/plot/<city>/<path:filename>")
+def serve_plot(city: str, filename: str):
+    city_key = _normalize_city_key(city)
+    if city_key not in set(CITY_KEYS):
+        abort(404)
+
+    safe_name = Path(filename).name
+    if safe_name != filename:
+        abort(404)
+
+    path = OUTPUTS / city_key / "plots" / safe_name
+    if not path.exists() or path.suffix.lower() not in {".png", ".jpg", ".jpeg", ".webp", ".svg"}:
+        abort(404)
+
     return send_file(path)
 
 if __name__ == "__main__":
