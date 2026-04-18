@@ -801,6 +801,26 @@ let selectedCity = 'newyork';
 let DATA = window.__INITIAL_DATA__ || null;
 let PRED_META = window.__INITIAL_PREDICTOR_META__ || {};
 
+if(typeof window.Plotly === 'undefined'){
+  console.warn('Plotly failed to load. Charts are disabled, but core dashboard interactions remain available.');
+  window.Plotly = {
+    newPlot: () => Promise.resolve(),
+    purge: () => {},
+    restyle: () => {},
+    d3: {
+      select: () => ({ node: () => null }),
+    },
+  };
+}
+
+function safeRun(label, fn){
+  try {
+    fn();
+  } catch (err) {
+    console.error(`Dashboard section failed: ${label}`, err);
+  }
+}
+
 function mapUrlsForCity(city){
   const cityKey = String(city || '').toLowerCase().replace(/[\s_-]+/g, '');
   return HAS_API ? {
@@ -896,7 +916,7 @@ const obs=new IntersectionObserver(entries=>{
 document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
 // ── SECTION NAV ──────────────────────────────────────────────────────
-const secs=['hero','profile','predict','compare','shap','cluster','signif','spatial','calendar','stats'];
+const secs=['hero','profile','predict','spatial','signif','compare','shap','cluster','calendar','stats'];
 const secObs=new IntersectionObserver(entries=>{
   entries.forEach(e=>{
     if(e.isIntersecting){
@@ -927,19 +947,52 @@ function setAccent(city){
   curR.style.borderColor=c;
 }
 
+function reorderDashboardSections(){
+  const sectionOrder=['hero','profile','predict','spatial','signif','compare','shap','cluster','calendar','stats'];
+  const footer=document.querySelector('footer');
+  if(!footer) return;
+
+  sectionOrder.forEach(id=>{
+    const sec=document.getElementById(id);
+    if(sec){
+      document.body.insertBefore(sec, footer);
+    }
+  });
+
+  const sideNav=document.getElementById('sidenav');
+  if(sideNav){
+    sectionOrder.forEach(id=>{
+      const dot=sideNav.querySelector(`.sn-dot[data-sec="${id}"]`);
+      if(dot){
+        sideNav.appendChild(dot);
+      }
+    });
+  }
+
+  let step=1;
+  sectionOrder.filter(id=>id!=='hero').forEach(id=>{
+    const numEl=document.querySelector(`#${id} .sec-num`);
+    if(numEl){
+      numEl.textContent=String(step).padStart(2,'0');
+      step += 1;
+    }
+  });
+}
+
 // ── MAIN DATA FETCH ──────────────────────────────────────────────────
 function initializeDashboard(){
-  buildCityCards();
-  buildPredictorSection();
-  buildCompareCharts();
-  buildSHAPCharts();
-  buildClusterCharts();
-  buildSignificantSection();
-  buildSpatialSection();
-  buildCalendarSection();
-  buildStatsSection();
-  selectCity('newyork',true);
-  initMapButtons();
+  reorderDashboardSections();
+  safeRun('city-cards', buildCityCards);
+  safeRun('predictor', buildPredictorSection);
+  safeRun('compare', buildCompareCharts);
+  safeRun('shap', buildSHAPCharts);
+  safeRun('cluster', buildClusterCharts);
+  safeRun('significant', buildSignificantSection);
+  safeRun('spatial', buildSpatialSection);
+  safeRun('calendar', buildCalendarSection);
+  safeRun('stats', buildStatsSection);
+  safeRun('city-select-initial', ()=>selectCity('newyork',true));
+  safeRun('map-buttons', initMapButtons);
 }
 
 if (DATA) {
@@ -950,17 +1003,7 @@ if (DATA) {
   } else {
     fetch(apiUrl('/api/data')).then(r=>r.json()).then(d=>{
       DATA=d;
-      buildCityCards();
-      buildPredictorSection();
-      buildCompareCharts();
-      buildSHAPCharts();
-      buildClusterCharts();
-      buildSignificantSection();
-      buildSpatialSection();
-      buildCalendarSection();
-      buildStatsSection();
-      selectCity('newyork',true);
-      initMapButtons();
+      initializeDashboard();
     }).catch(err=>console.error(err));
   }
 }
@@ -1303,11 +1346,24 @@ function renderPredictionSensitivity(basePayload){
 // ── MODEL PROGRESSION ───────────────────────────────────────────────
 function buildProgressionSection(){
   const rows=(DATA.xgb_progression||[]).slice();
-  if(!rows.length){
-    const t=document.getElementById('progressTable');
-    if(t){ t.innerHTML='<tr><td style="padding:10px;color:var(--muted)">Progression data not found.</td></tr>'; }
+  const section=document.getElementById('progress');
+  const navDot=document.querySelector('.sn-dot[data-sec="progress"]');
+  const chartEl=document.getElementById('chartProgressionR2');
+  const hasStageData=rows.some(r=>
+    Number.isFinite(Number(r.stage0_old_r2)) ||
+    Number.isFinite(Number(r.stage1_random_r2)) ||
+    Number.isFinite(Number(r.stage2_grouped_r2))
+  );
+
+  if(!rows.length || !hasStageData){
+    if(chartEl && window.Plotly){ Plotly.purge(chartEl); }
+    if(section){ section.style.display='none'; }
+    if(navDot){ navDot.style.display='none'; }
     return;
   }
+
+  if(section){ section.style.display=''; }
+  if(navDot){ navDot.style.display=''; }
 
   const cityOrder=CO.filter(c=>rows.some(r=>String(r.city).toLowerCase()===c));
   const ordered=cityOrder.map(c=>rows.find(r=>String(r.city).toLowerCase()===c)).filter(Boolean);
@@ -1315,6 +1371,8 @@ function buildProgressionSection(){
   const stage0=ordered.map(r=>Number(r.stage0_old_r2||0));
   const stage1=ordered.map(r=>Number(r.stage1_random_r2||0));
   const stage2=ordered.map(r=>Number(r.stage2_grouped_r2||0));
+
+  if(!chartEl){ return; }
 
   Plotly.newPlot('chartProgressionR2',[
     {type:'scatter',mode:'lines+markers',name:'Stage 0 (baseline)',x:cityOrder.map(c=>CL[c]),y:stage0,line:{width:2,color:'#8fa0b6'},marker:{size:7,color:'#8fa0b6'}},
