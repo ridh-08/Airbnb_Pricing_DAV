@@ -194,10 +194,33 @@ def create_host_level_features(
 
 def cluster_host_strategies(
     host_features_df: pd.DataFrame,
-    k: int = 3,
+    k: int | None = None,
+    k_range: tuple[int, int] = (2, 7),
     random_state: int = 42,
+    silhouette_sample: int = 5_000,
 ) -> dict[str, Any]:
-    """Cluster hosts into strategy groups using KMeans (k=3 by default)."""
+    """Cluster hosts into strategy groups using KMeans.
+
+    Parameters
+    ----------
+    host_features_df
+        Per-host feature frame; must contain avg_price, availability_365,
+        review_density, number_of_listings_per_host.
+    k
+        If given, fit exactly this k. If None, scan `k_range` and pick
+        the silhouette-maximising k.
+    k_range
+        Inclusive range (k_min, k_max) to scan when k is None.
+    random_state
+        KMeans seed.
+    silhouette_sample
+        Subsample size for silhouette_score (for speed on large data).
+
+    Returns
+    -------
+    dict with keys: host_labels, summary_stats, model, scaler,
+    feature_columns, chosen_k, silhouette_scan (list of (k, score)).
+    """
     required = [
         "avg_price",
         "availability_365",
@@ -212,13 +235,36 @@ def cluster_host_strategies(
     for col in required:
         work[col] = pd.to_numeric(work[col], errors="coerce")
     work = work.dropna(subset=required).copy()
-    if len(work) < k:
-        raise ValueError(f"Need at least {k} host rows for clustering; got {len(work)}")
+    k_min = max(2, k_range[0])
+    k_max = k_range[1]
+    if len(work) <= k_max:
+        raise ValueError(f"Need more than {k_max} host rows; got {len(work)}")
 
     scaler = StandardScaler()
     X_scaled = scaler.fit_transform(work[required])
 
-    model = KMeans(n_clusters=k, random_state=random_state, n_init=10)
+    silhouette_scan: list[tuple[int, float]] = []
+    chosen_k = k
+    if chosen_k is None:
+        best_k, best_score = None, -1.0
+        for ki in range(k_min, k_max + 1):
+            km = KMeans(n_clusters=ki, random_state=random_state, n_init=10)
+            labels = km.fit_predict(X_scaled)
+            score = float(
+                silhouette_score(
+                    X_scaled,
+                    labels,
+                    sample_size=min(silhouette_sample, len(X_scaled)),
+                    random_state=random_state,
+                )
+            )
+            silhouette_scan.append((ki, score))
+            if score > best_score:
+                best_score = score
+                best_k = ki
+        chosen_k = int(best_k)
+
+    model = KMeans(n_clusters=chosen_k, random_state=random_state, n_init=10)
     work["host_cluster"] = model.fit_predict(X_scaled).astype(int)
 
     summary = (
@@ -226,14 +272,16 @@ def cluster_host_strategies(
         .agg(
             host_count=("host_id", "nunique"),
             avg_price=("avg_price", "mean"),
+            median_price=("avg_price", "median"),
             avg_availability=("availability_365", "mean"),
             avg_review_density=("review_density", "mean"),
             avg_listings_per_host=("number_of_listings_per_host", "mean"),
             avg_reviews=("avg_reviews", "mean"),
         )
-        .sort_values("host_cluster")
+        .sort_values("host_count", ascending=False)
         .reset_index(drop=True)
     )
+    summary["pct"] = (summary["host_count"] / summary["host_count"].sum() * 100).round(1)
 
     return {
         "host_labels": work,
@@ -241,6 +289,8 @@ def cluster_host_strategies(
         "model": model,
         "scaler": scaler,
         "feature_columns": required,
+        "chosen_k": chosen_k,
+        "silhouette_scan": silhouette_scan,
     }
 
 
@@ -300,34 +350,64 @@ def run_host_strategy_segmentation(
     city_name: str | None = None,
     output_dir: Path | None = None,
     random_state: int = 42,
+    exclude_cities: tuple[str, ...] = ("losangeles",),
+    price_cap: float = 10_000.0,
 ) -> dict[str, Any]:
-    """Run host strategy segmentation workflow and save outputs.
+    """Cluster host strategies and export labels, summaries, and scan diagnostics."""
 
-    Saves:
-    - host_strategy_cluster_labels{suffix}.csv
-    - host_strategy_cluster_summary{suffix}.csv
-    """
     tables_dir = output_dir or TABLES_DIR
     tables_dir.mkdir(parents=True, exist_ok=True)
     suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
 
     host_features = create_host_level_features(listings_df, city_name=city_name)
-    clustered = cluster_host_strategies(host_features, k=3, random_state=random_state)
+
+    # NEW: filter out artefact cities and artefact price values
+    if "city" in host_features.columns and exclude_cities:
+        n_before = len(host_features)
+        host_features = host_features[~host_features["city"].isin(exclude_cities)]
+        n_excluded_city = n_before - len(host_features)
+        if n_excluded_city:
+            print(f"[host_strategy] excluded {n_excluded_city} rows from {exclude_cities}")
+
+    n_before = len(host_features)
+    host_features = host_features[
+        (host_features["avg_price"] > 0) & (host_features["avg_price"] < price_cap)
+    ]
+    n_dropped_price = n_before - len(host_features)
+    if n_dropped_price:
+        print(f"[host_strategy] dropped {n_dropped_price} rows with price >= ${price_cap:,.0f}")
+
+    # Scan k, pick silhouette optimum
+    clustered = cluster_host_strategies(host_features, k=None, random_state=random_state)
     interpreted = interpret_host_strategy_clusters(clustered["summary_stats"])
 
     labels_path = tables_dir / f"host_strategy_cluster_labels{suffix}.csv"
     summary_path = tables_dir / f"host_strategy_cluster_summary{suffix}.csv"
+    scan_path = tables_dir / f"host_strategy_silhouette_scan{suffix}.csv"
+
     clustered["host_labels"].to_csv(labels_path, index=False)
     interpreted.to_csv(summary_path, index=False)
+    pd.DataFrame(
+        clustered["silhouette_scan"], columns=["k", "silhouette"]
+    ).to_csv(scan_path, index=False)
+
+    print(
+        f"[host_strategy] chose k={clustered['chosen_k']} "
+        f"(silhouette scan: {clustered['silhouette_scan']})"
+    )
 
     return {
         "host_features": host_features,
         "host_labels": clustered["host_labels"],
         "summary_stats": clustered["summary_stats"],
         "interpreted_summary": interpreted,
+        "silhouette_scan": clustered["silhouette_scan"],
+        "chosen_k": clustered["chosen_k"],
         "labels_path": labels_path,
         "summary_path": summary_path,
+        "scan_path": scan_path,
     }
+
 
 
 def run_kmeans_with_pca(

@@ -8,6 +8,8 @@ import pandas as pd
 
 from src.config import CITY_FOLDERS
 
+from src.data_quality_filter import apply_price_artefact_filter
+
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 PROCESSED_DIR = BASE_DIR / "data" / "processed"
@@ -21,6 +23,8 @@ RELEVANT_COLUMNS = [
     "latitude",
     "longitude",
     "accommodates",
+    "minimum_nights",
+    "maximum_nights",
     "number_of_reviews",
     "availability_365",
     "amenities",
@@ -171,10 +175,11 @@ def clean_city_listings(
     room_type_price_fallback: dict[str, float],
     global_price_fallback: float,
 ) -> pd.DataFrame:
-    """Apply Step 2 cleaning rules to a city's listings data."""
-    cleaned = _standardize_listing_columns(listings_df)
+    
+    
+    cleaned = _standardize_listing_columns(listings_df)  # noqa: F821
 
-    cleaned["price"] = _clean_price_column(cleaned["price"])
+    cleaned["price"] = _clean_price_column(cleaned["price"])  # noqa: F821
     cleaned["price_observed"] = cleaned["price"].notna()
 
     numeric_columns = [
@@ -182,6 +187,8 @@ def clean_city_listings(
         "latitude",
         "longitude",
         "accommodates",
+        "minimum_nights",
+        "maximum_nights",
         "number_of_reviews",
         "availability_365",
     ]
@@ -197,7 +204,9 @@ def clean_city_listings(
     cleaned["amenities"] = cleaned["amenities"].fillna("{}")
 
     # Fill missing prices using room-type medians, then a global median fallback.
-    cleaned["price"] = cleaned["price"].fillna(cleaned["room_type"].map(room_type_price_fallback))
+    cleaned["price"] = cleaned["price"].fillna(
+        cleaned["room_type"].map(room_type_price_fallback)
+    )
     cleaned["price"] = cleaned["price"].fillna(global_price_fallback)
     cleaned["price_imputed"] = ~cleaned["price_observed"]
 
@@ -212,11 +221,10 @@ def clean_city_listings(
     cleaned = cleaned.dropna(subset=required_fields)
     cleaned["listing_id"] = cleaned["listing_id"].astype("int64")
 
-    cleaned = cleaned[cleaned["price"] > 0].copy()
-    price_cap = cleaned["price"].quantile(0.99)
-    cleaned = cleaned[cleaned["price"] <= price_cap].copy()
-
     cleaned["city"] = city_key
+
+   
+    cleaned = apply_price_artefact_filter(cleaned, price_col="price")
 
     return cleaned.reset_index(drop=True)
 

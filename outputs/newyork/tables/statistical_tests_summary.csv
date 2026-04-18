@@ -1,0 +1,7 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (newyork: room type),newyork:Entire home/apt,newyork:Private room,277836019.5,0.0,significant
+Mann-Whitney U (newyork: room type),newyork:Entire home/apt,newyork:Shared room,3839127.5,2.0670433402923114e-83,significant
+Mann-Whitney U (newyork: room type),newyork:Hotel room,newyork:Private room,983803.5,7.479166752227442e-42,significant
+Mann-Whitney U (newyork: room type),newyork:Hotel room,newyork:Shared room,13930.0,9.623549972164349e-29,significant
+Mann-Whitney U (newyork: room type),newyork:Private room,newyork:Shared room,2673894.0,8.1592795265919e-28,significant
+Mann-Whitney U (newyork: room type),newyork:Entire home/apt,newyork:Hotel room,163160.0,3.378181623170106e-24,significant

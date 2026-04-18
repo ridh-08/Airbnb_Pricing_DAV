@@ -53,6 +53,30 @@ def _prepare_xgboost_design_matrix(
         raise KeyError(f"Target column '{target}' not found in dataframe.")
 
     work = df.copy()
+
+    # When price labels were imputed upstream, train only on observed targets.
+    # This avoids learning deterministic fallback rules instead of market signal.
+    if "price_imputed" in work.columns:
+        imputed_raw = work["price_imputed"]
+        if pd.api.types.is_bool_dtype(imputed_raw):
+            imputed_mask = imputed_raw.fillna(False).astype(bool)
+        else:
+            mapped = (
+                imputed_raw.astype(str)
+                .str.strip()
+                .str.lower()
+                .map({"true": True, "1": True, "false": False, "0": False})
+            )
+            imputed_mask = mapped.fillna(False).astype(bool)
+
+        observed_mask = ~imputed_mask
+        observed_count = int(observed_mask.sum())
+        if observed_count < 500:
+            raise ValueError(
+                "Insufficient observed (non-imputed) target rows for XGBoost training."
+            )
+        work = work.loc[observed_mask].copy()
+
     work[target] = pd.to_numeric(work[target], errors="coerce")
     work = work[work[target] > 0].copy()
 
@@ -557,11 +581,62 @@ def _build_model_matrix(city_df: pd.DataFrame, top_n_neighbourhoods: int = 10) -
     return X, y
 
 
+def _select_representative_sample_indices(
+    city_df: pd.DataFrame,
+    max_rows: int,
+    random_state: int,
+    top_n_neighbourhoods: int = 10,
+) -> list[int]:
+    """Select a stratified representative sample across room type and neighborhood buckets."""
+    if max_rows <= 0:
+        return []
+
+    if len(city_df) <= max_rows:
+        return city_df.index.tolist()
+
+    work = city_df.copy()
+    room = work["room_type"].astype(str).replace({"nan": "unknown"}).fillna("unknown")
+    neigh = work["neighbourhood"].astype(str).replace({"nan": "OTHER"}).fillna("OTHER")
+    top_neigh = neigh.value_counts().head(top_n_neighbourhoods).index.tolist()
+    neigh_bucket = neigh.where(neigh.isin(top_neigh), other="OTHER")
+    work["_shap_stratum"] = room + "__" + neigh_bucket
+
+    rng = np.random.default_rng(random_state)
+    strata = work.groupby("_shap_stratum")
+    total = len(work)
+    chosen_parts: list[pd.Index] = []
+
+    for _, group in strata:
+        proportion = len(group) / total
+        target = max(1, int(round(proportion * max_rows)))
+        target = min(target, len(group))
+        chosen_parts.append(group.sample(n=target, random_state=int(rng.integers(0, 2**32 - 1))).index)
+
+    chosen_index = pd.Index([])
+    for part in chosen_parts:
+        chosen_index = chosen_index.union(part)
+
+    if len(chosen_index) > max_rows:
+        chosen_index = pd.Index(
+            rng.choice(chosen_index.to_numpy(), size=max_rows, replace=False)
+        )
+    elif len(chosen_index) < max_rows:
+        remaining = work.index.difference(chosen_index)
+        if len(remaining) > 0:
+            fill_count = min(max_rows - len(chosen_index), len(remaining))
+            fill = pd.Index(rng.choice(remaining.to_numpy(), size=fill_count, replace=False))
+            chosen_index = chosen_index.union(fill)
+
+    return chosen_index.tolist()
+
+
 def run_city_regression(
     df: pd.DataFrame,
     city: str,
     top_n_neighbourhoods: int = 10,
     random_state: int = 42,
+    shap_output_dir: Path | None = None,
+    shap_sample_size: int = 400,
 ) -> dict[str, Any]:
     """Run OLS and Random Forest regression for one city and return model artifacts."""
     city_df = _clean_city_frame(df, city=city)
@@ -591,6 +666,30 @@ def run_city_regression(
         .reset_index(drop=True)
     )
 
+    shap_summary: pd.DataFrame | None = None
+    shap_beeswarm_path: Path | None = None
+    if len(X) > 0:
+        shap_indices = _select_representative_sample_indices(
+            city_df,
+            max_rows=min(shap_sample_size, len(X)),
+            random_state=random_state,
+            top_n_neighbourhoods=top_n_neighbourhoods,
+        )
+        shap_sample = X.loc[shap_indices].copy()
+        try:
+            shap_summary = compute_shap_feature_importance(rf, shap_sample)
+            shap_summary.insert(0, "city", city.lower())
+            if shap_output_dir is not None:
+                shap_beeswarm_path = save_shap_beeswarm_plot(
+                    rf,
+                    shap_sample,
+                    city,
+                    shap_output_dir,
+                    top_n=min(10, len(shap_sample.columns)),
+                )
+        except Exception as exc:
+            print(f"[regression] SHAP generation skipped for {city}: {exc}")
+
     return {
         "city": city.lower(),
         "ols_model": ols_model,
@@ -599,6 +698,8 @@ def run_city_regression(
         "rf_model": rf,
         "rf_importance": rf_importance,
         "n_rows": int(len(X)),
+        "shap_summary": shap_summary,
+        "shap_beeswarm_path": shap_beeswarm_path,
     }
 
 
@@ -708,9 +809,11 @@ def get_clean_ols_summary(ols_summary: pd.DataFrame) -> pd.DataFrame:
 def run_regression_analysis(
     df: pd.DataFrame,
     output_dir: Path | None = None,
+    tables_output_dir: Path | None = None,
     top_n_neighbourhoods: int = 10,
     random_state: int = 42,
     city_name: str | None = None,
+    shap_sample_size: int = 400,
 ) -> dict[str, Any]:
     """Run full regression workflow for all cities or one selected city."""
     sns.set_theme(style="whitegrid")
@@ -729,6 +832,8 @@ def run_regression_analysis(
             city=city,
             top_n_neighbourhoods=top_n_neighbourhoods,
             random_state=random_state,
+            shap_output_dir=output_dir,
+            shap_sample_size=shap_sample_size,
         )
 
     if not results:

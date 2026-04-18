@@ -1,0 +1,46 @@
+feature,mean_abs_shap
+room_Private room,0.22078452
+longitude,0.1663089
+minimum_nights,0.14942987
+accommodates,0.14163336
+amenities_count,0.079422735
+latitude,0.07610358
+room_Entire home/apt,0.05695218
+reviews_per_month,0.05131091
+availability_365,0.033924725
+demand_score,0.030076634
+review_density,0.018206915
+number_of_reviews,0.009960656
+neigh_Hell's Kitchen,0.0071086003
+neigh_Midtown,0.005486032
+neigh_Williamsburg,0.0046672123
+neigh_Greenpoint,0.004188219
+neigh_OTHER,0.0032076011
+neigh_Long Island City,0.0021800362
+neigh_East Village,0.0018541812
+room_Shared room,0.0016894498
+room_Hotel room,0.0011882541
+neigh_East Flatbush,0.0011520559
+neigh_Upper East Side,0.0011430834
+neigh_Kips Bay,0.001120735
+neigh_Chelsea,0.0010214485
+neigh_West Village,0.0007616071
+neigh_Bedford-Stuyvesant,0.0007360196
+neigh_Jamaica,0.00073446817
+neigh_Theater District,0.0006529679
+neigh_Crown Heights,0.00061454024
+neigh_Lower East Side,0.00050795387
+neigh_East Harlem,0.00046335728
+neigh_Financial District,0.00038274212
+neigh_Ridgewood,0.000363154
+neigh_Murray Hill,0.000361057
+neigh_Bushwick,0.00032992553
+neigh_Upper West Side,0.0002574775
+neigh_Canarsie,0.00020630713
+neigh_Astoria,0.0001875845
+neigh_East New York,0.00018486782
+neigh_Harlem,0.00015371227
+neigh_Flushing,0.0001482089
+neigh_Prospect-Lefferts Gardens,3.0837902e-05
+neigh_Flatbush,0.0
+neigh_Washington Heights,0.0

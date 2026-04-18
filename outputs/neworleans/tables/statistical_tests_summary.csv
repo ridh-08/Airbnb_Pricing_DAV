@@ -1,0 +1,7 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (neworleans: room type),neworleans:Entire home/apt,neworleans:Private room,4006059.0,5.3072435872670596e-71,significant
+Mann-Whitney U (neworleans: room type),neworleans:Hotel room,neworleans:Private room,55958.0,1.4729314390397176e-19,significant
+Mann-Whitney U (neworleans: room type),neworleans:Entire home/apt,neworleans:Hotel room,155768.0,2.656643116910464e-06,significant
+Mann-Whitney U (neworleans: room type),neworleans:Hotel room,neworleans:Shared room,412.0,0.00789151954178531,significant
+Mann-Whitney U (neworleans: room type),neworleans:Entire home/apt,neworleans:Shared room,32947.5,0.021106151428580466,significant
+Mann-Whitney U (neworleans: room type),neworleans:Private room,neworleans:Shared room,4622.5,0.06275905493755383,not significant

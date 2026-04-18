@@ -1,0 +1,6 @@
+city,rows_total,observed_rows,imputed_rows,room_type,observed_rate,imputed_rate
+austin,10333,10317,16,ALL,0.9984515629536437,0.001548437046356334
+austin,8929,8929,0,Entire home/apt,1.0,0.0
+austin,33,33,0,Hotel room,1.0,0.0
+austin,1306,1290,16,Private room,0.9877488514548239,0.01225114854517611
+austin,65,65,0,Shared room,1.0,0.0

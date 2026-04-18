@@ -1,0 +1,6 @@
+rank,losangeles_feature,losangeles_importance
+1,room_Private room,0.8792171183908442
+2,room_Shared room,0.12078288160827208
+3,amenities_count,3.019203880881228e-13
+4,availability_365,2.532706477763212e-13
+5,minimum_nights,1.1114489038938299e-13

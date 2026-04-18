@@ -1,0 +1,6 @@
+rank,nashville_feature,nashville_importance
+1,accommodates,0.3187633120813614
+2,availability_365,0.1534698955170467
+3,amenities_count,0.1433413681813766
+4,reviews_per_month,0.1155382457487857
+5,room_Private room,0.10481437974004763

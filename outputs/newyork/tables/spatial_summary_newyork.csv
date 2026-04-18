@@ -1,0 +1,2 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price,morans_i,morans_i_expected,morans_i_p_value,morans_i_z_score,morans_i_significant,spatial_cluster_class
+newyork,233,226,0.97,Fort Wadsworth,600.0,0.4108810684896336,-0.0044444444444444444,0.001,8.456909069785823,True,significant_positive_strong

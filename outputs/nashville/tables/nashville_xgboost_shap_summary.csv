@@ -1,0 +1,46 @@
+feature,mean_abs_shap
+accommodates,0.22375871
+longitude,0.059201594
+minimum_nights,0.05079612
+room_Private room,0.047335
+amenities_count,0.04668478
+latitude,0.04480618
+reviews_per_month,0.0443935
+availability_365,0.018544868
+demand_score,0.013779958
+neigh_District 19,0.0137433475
+number_of_reviews,0.013594057
+review_density,0.012663948
+room_Entire home/apt,0.007950501
+neigh_District 5,0.0052835546
+neigh_District 17,0.0038316085
+neigh_District 6,0.0026142146
+neigh_District 18,0.002242938
+neigh_District 27,0.0014045486
+neigh_District 25,0.0012964617
+neigh_District 20,0.001141165
+neigh_District 21,0.0009842943
+neigh_District 15,0.0009550685
+neigh_District 13,0.00067001686
+neigh_District 2,0.0006656492
+neigh_District 16,0.00054400467
+neigh_District 10,0.0005300479
+neigh_District 26,0.00050265086
+neigh_District 11,0.00046452685
+neigh_District 7,0.00035050703
+neigh_District 3,0.00028061238
+neigh_OTHER,0.00027524366
+room_Hotel room,0.00026922417
+neigh_District 14,0.00023543557
+neigh_District 1,0.0001803017
+neigh_District 8,0.00013653233
+neigh_District 24,0.00012864647
+room_Shared room,9.742263e-05
+neigh_District 28,9.1927635e-05
+neigh_District 12,8.6275286e-05
+neigh_District 30,7.1058945e-05
+neigh_District 29,7.070042e-05
+neigh_District 35,5.1633167e-05
+neigh_District 4,5.011675e-05
+neigh_District 31,4.4206303e-05
+neigh_District 9,7.1903614e-06

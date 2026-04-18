@@ -1,0 +1,2 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price,morans_i,morans_i_expected,morans_i_p_value,morans_i_z_score,morans_i_significant,spatial_cluster_class
+nashville,35,35,1.0,District 23,276.15,0.4330344684151315,-0.029411764705882353,0.001,4.894293002448203,True,significant_positive_strong

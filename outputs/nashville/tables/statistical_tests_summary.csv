@@ -1,0 +1,7 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (nashville: room type),nashville:Entire home/apt,nashville:Private room,6531753.0,0.0,significant
+Mann-Whitney U (nashville: room type),nashville:Hotel room,nashville:Private room,7157.0,3.996881270979354e-06,significant
+Mann-Whitney U (nashville: room type),nashville:Entire home/apt,nashville:Shared room,17278.5,0.2791487827509187,not significant
+Mann-Whitney U (nashville: room type),nashville:Private room,nashville:Shared room,1634.5,0.39414612169765617,not significant
+Mann-Whitney U (nashville: room type),nashville:Hotel room,nashville:Shared room,18.0,0.45796621760981193,not significant
+Mann-Whitney U (nashville: room type),nashville:Entire home/apt,nashville:Hotel room,36381.0,0.8015014646004985,not significant

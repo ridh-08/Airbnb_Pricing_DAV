@@ -1,0 +1,9 @@
+Feature,Coefficient,P-Value,R²,Significant
+accommodates,0.0684,0.0,0.4421,True
+amenities_count,0.0025,0.0,0.4421,True
+availability_365,-0.0001,0.0069,0.4421,True
+reviews_per_month,-0.0129,0.0,0.4421,True
+minimum_nights,-0.0004,0.1422,0.4421,False
+room_Hotel room,0.2969,0.0267,0.4421,True
+room_Private room,-0.4712,0.0,0.4421,True
+room_Shared room,-0.4596,0.047,0.4421,True

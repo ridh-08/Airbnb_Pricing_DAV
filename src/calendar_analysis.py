@@ -29,26 +29,15 @@ MONTH_LABELS = [
 WEEKDAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
 
-def _load_calendar_data(city_name: str | None = None) -> pd.DataFrame:
-    calendar_files = discover_processed_city_files("calendar_sample_clean")
-    if city_name is not None:
-        city_key = normalize_city_name(city_name)
-        calendar_files = {k: v for k, v in calendar_files.items() if k == city_key}
+def _load_calendar_data(path: Path, city: str) -> pd.DataFrame:
+    """Load the minimal calendar columns needed for one city."""
+    if not path.exists():
+        raise FileNotFoundError(
+            f"Missing cleaned calendar sample for {city}: {path}. Run preprocessing first."
+        )
 
-    if not calendar_files:
-        raise FileNotFoundError("No cleaned calendar samples found. Run preprocessing first.")
-
-    parts: list[pd.DataFrame] = []
-    for city, path in calendar_files.items():
-        if not path.exists():
-            raise FileNotFoundError(
-                f"Missing cleaned calendar sample for {city}: {path}. Run preprocessing first."
-            )
-        df = pd.read_csv(path)
-        df["city"] = city
-        parts.append(df)
-
-    data = pd.concat(parts, ignore_index=True)
+    data = pd.read_csv(path, usecols=["listing_id", "date", "available", "price"])
+    data["city"] = city
     data["date"] = pd.to_datetime(data["date"], errors="coerce", dayfirst=True)
     data["price"] = pd.to_numeric(data["price"], errors="coerce")
     data["available"] = pd.to_numeric(data["available"], errors="coerce")
@@ -428,45 +417,84 @@ def run_calendar_analysis(
     TABLES_DIR.mkdir(parents=True, exist_ok=True)
     sns.set_theme(style="whitegrid")
 
-    calendar_df = _load_calendar_data(city_name=city_name)
-    temporal_df = engineer_calendar_temporal_features(calendar_df, city_name=city_name)
+    calendar_files = discover_processed_city_files("calendar_sample_clean")
+    if city_name is not None:
+        city_key = normalize_city_name(city_name)
+        calendar_files = {k: v for k, v in calendar_files.items() if k == city_key}
 
-    price_plot = plot_selected_listing_price_trends(
-        calendar_df,
-        output_dir=plots_output_dir,
-        city_name=city_name,
-    )
-    availability_plot = plot_city_level_availability_trend(
-        calendar_df,
-        output_dir=plots_output_dir,
-        city_name=city_name,
-    )
-    summary_path = export_calendar_summary(
-        calendar_df,
-        output_dir=tables_output_dir,
-        city_name=city_name,
-    )
+    if not calendar_files:
+        raise FileNotFoundError("No cleaned calendar samples found. Run preprocessing first.")
+
+    plot_paths: list[Path] = []
+    summary_frames: list[pd.DataFrame] = []
+    temporal_frames: list[pd.DataFrame] = []
+
+    for city, path in calendar_files.items():
+        calendar_df = _load_calendar_data(path, city)
+        temporal_df = engineer_calendar_temporal_features(calendar_df, city_name=city)
+
+        price_plot = plot_selected_listing_price_trends(
+            calendar_df,
+            output_dir=plots_output_dir,
+            city_name=city,
+        )
+        availability_plot = plot_city_level_availability_trend(
+            calendar_df,
+            output_dir=plots_output_dir,
+            city_name=city,
+        )
+        summary_path = export_calendar_summary(
+            calendar_df,
+            output_dir=tables_output_dir,
+            city_name=city,
+        )
+        temporal_summary_path = export_calendar_temporal_summary(
+            temporal_df,
+            output_dir=tables_output_dir,
+            city_name=city,
+        )
+
+        price_heatmap = plot_calendar_price_heatmap(
+            temporal_df,
+            output_dir=plots_output_dir,
+            city_name=city,
+        )
+        availability_heatmap = plot_calendar_availability_heatmap(
+            temporal_df,
+            output_dir=plots_output_dir,
+            city_name=city,
+        )
+
+        print(f"Calendar temporal summary table saved: {temporal_summary_path}")
+
+        plot_paths.extend([price_plot, availability_plot, price_heatmap, availability_heatmap])
+        summary_frames.append(pd.read_csv(summary_path))
+        temporal_frames.append(temporal_df)
+
+    if len(summary_frames) == 1:
+        combined_summary = summary_frames[0]
+    else:
+        combined_summary = pd.concat(summary_frames, ignore_index=True)
+
+    summary_output_dir = tables_output_dir or TABLES_DIR
+    summary_output_dir.mkdir(parents=True, exist_ok=True)
+    suffix = f"_{normalize_city_name(city_name)}" if city_name else ""
+    summary_path = summary_output_dir / f"calendar_summary{suffix}.csv"
+    combined_summary.to_csv(summary_path, index=False)
+
+    if len(temporal_frames) == 1:
+        combined_temporal = temporal_frames[0]
+    else:
+        combined_temporal = pd.concat(temporal_frames, ignore_index=True)
 
     temporal_summary_path = export_calendar_temporal_summary(
-        temporal_df,
+        combined_temporal,
         output_dir=tables_output_dir,
         city_name=city_name,
     )
-
-    price_heatmap = plot_calendar_price_heatmap(
-        temporal_df,
-        output_dir=plots_output_dir,
-        city_name=city_name,
-    )
-    availability_heatmap = plot_calendar_availability_heatmap(
-        temporal_df,
-        output_dir=plots_output_dir,
-        city_name=city_name,
-    )
-
     print(f"Calendar temporal summary table saved: {temporal_summary_path}")
 
-    return [price_plot, availability_plot, price_heatmap, availability_heatmap], summary_path
+    return plot_paths, summary_path
 
 
 def main() -> None:

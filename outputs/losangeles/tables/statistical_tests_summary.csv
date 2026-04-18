@@ -1,0 +1,4 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (losangeles: room type),losangeles:Entire home/apt,losangeles:Private room,382946320.0,0.0,significant
+Mann-Whitney U (losangeles: room type),losangeles:Entire home/apt,losangeles:Shared room,10040420.0,0.0,significant
+Mann-Whitney U (losangeles: room type),losangeles:Private room,losangeles:Shared room,3409796.0,0.0,significant

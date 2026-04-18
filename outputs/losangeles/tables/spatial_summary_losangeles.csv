@@ -1,0 +1,2 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price,morans_i,morans_i_expected,morans_i_p_value,morans_i_z_score,morans_i_significant,spatial_cluster_class
+losangeles,270,266,0.9852,Lake Hughes,170.0,0.2730663582376473,-0.0037735849056603774,0.001,7.0413028060680265,True,significant_positive_moderate

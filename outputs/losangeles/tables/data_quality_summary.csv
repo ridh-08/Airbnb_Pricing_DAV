@@ -1,0 +1,5 @@
+city,rows_total,observed_rows,imputed_rows,room_type,observed_rate,imputed_rate
+losangeles,45283,0,45283,ALL,0.0,1.0
+losangeles,33580,0,33580,Entire home/apt,0.0,1.0
+losangeles,11404,0,11404,Private room,0.0,1.0
+losangeles,299,0,299,Shared room,0.0,1.0

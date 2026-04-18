@@ -1,0 +1,7 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (chicago: room type),chicago:Entire home/apt,chicago:Private room,10938866.5,0.0,significant
+Mann-Whitney U (chicago: room type),chicago:Entire home/apt,chicago:Shared room,232406.0,8.63706482665184e-23,significant
+Mann-Whitney U (chicago: room type),chicago:Hotel room,chicago:Private room,56688.5,9.086831213299894e-21,significant
+Mann-Whitney U (chicago: room type),chicago:Hotel room,chicago:Shared room,1149.5,1.846642681843978e-12,significant
+Mann-Whitney U (chicago: room type),chicago:Private room,chicago:Shared room,51589.0,1.5539714202535913e-09,significant
+Mann-Whitney U (chicago: room type),chicago:Entire home/apt,chicago:Hotel room,42310.5,4.21754291006863e-09,significant

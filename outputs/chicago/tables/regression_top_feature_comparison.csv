@@ -1,0 +1,6 @@
+rank,chicago_feature,chicago_importance
+1,room_Private room,0.33680742467687363
+2,accommodates,0.17958617308884883
+3,availability_365,0.12756436668712798
+4,amenities_count,0.1074363104265999
+5,reviews_per_month,0.07597005594571456

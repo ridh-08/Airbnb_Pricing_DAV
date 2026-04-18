@@ -1,0 +1,6 @@
+city,rows_total,observed_rows,imputed_rows,room_type,observed_rate,imputed_rate
+nashville,9358,6609,2749,ALL,0.7062406497114768,0.2937593502885232
+nashville,8491,6096,2395,Entire home/apt,0.7179366387940171,0.2820633612059828
+nashville,9,9,0,Hotel room,1.0,0.0
+nashville,855,502,353,Private room,0.5871345029239766,0.4128654970760234
+nashville,3,2,1,Shared room,0.6666666666666666,0.3333333333333333

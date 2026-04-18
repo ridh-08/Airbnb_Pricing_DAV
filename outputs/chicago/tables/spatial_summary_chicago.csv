@@ -1,0 +1,2 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price,morans_i,morans_i_expected,morans_i_p_value,morans_i_z_score,morans_i_significant,spatial_cluster_class
+chicago,77,76,0.987,Near North Side,291.64799154334037,0.39819956071408086,-0.013333333333333334,0.001,5.888175505476519,True,significant_positive_moderate

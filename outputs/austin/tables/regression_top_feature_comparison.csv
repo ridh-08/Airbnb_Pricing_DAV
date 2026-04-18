@@ -1,0 +1,6 @@
+rank,austin_feature,austin_importance
+1,accommodates,0.45501373107170634
+2,availability_365,0.1265266239729192
+3,amenities_count,0.1223863950892177
+4,reviews_per_month,0.11015727923137085
+5,minimum_nights,0.06521580750271477

@@ -115,6 +115,11 @@ def _save_regression_outputs(result: dict[str, Any], city_name: str, tables_dir:
     rf_path = tables_dir / "regression_rf_importance.csv"
     city_result["rf_importance"].to_csv(rf_path, index=False)
 
+    shap_summary = city_result.get("shap_summary")
+    if shap_summary is not None:
+        shap_path = tables_dir / "shap_feature_importance.csv"
+        shap_summary.to_csv(shap_path, index=False)
+
     top_cmp_path = tables_dir / "regression_top_feature_comparison.csv"
     result["top_feature_comparison"].to_csv(top_cmp_path, index=False)
 
@@ -140,6 +145,7 @@ def run_full_pipeline_for_city(city_name: str) -> dict[str, Any]:
     regression_result = run_regression_analysis(
         clustered_df,
         output_dir=plots_dir,
+        tables_output_dir=tables_dir,
         city_name=city_key,
     )
     _save_regression_outputs(regression_result, city_key, tables_dir)

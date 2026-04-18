@@ -81,22 +81,35 @@ def _load_dashboard_data() -> dict[str, list[dict[str, Any]]]:
     return data
 
 
-def _build_city_cards(data: dict[str, list[dict[str, Any]]]) -> list[dict[str, Any]]:
+def _build_city_cards(DATA, CITY_KEYS, CITY_FOLDERS, CITY_COLORS) -> list[dict[str, Any]]:
+    """Build city overview cards with data-quality flags.
+
+    REPLACE the original _build_city_cards() with this version. The
+    signature here takes dependencies as args for testability; in app.py
+    they are module-level globals so remove the args accordingly.
+    """
     cards: list[dict[str, Any]] = []
     for city in CITY_KEYS:
-        cal = next((row for row in data.get("calendar", []) if row.get("city") == city), {})
-        r2 = next((row for row in data.get("r2", []) if row.get("city") == city), {})
+        cal = next((r for r in DATA.get("calendar", []) if r.get("city") == city), {})
+        r2 = next((r for r in DATA.get("r2", []) if r.get("city") == city), {})
+        issue = DATA_QUALITY_ISSUES.get(city)
+        r2_value = float(r2.get("r2", 0.0) or 0.0)
         cards.append(
             {
                 "city": city,
                 "label": CITY_FOLDERS.get(city, city.title()),
                 "color": CITY_COLORS.get(city, "#666666"),
                 "median_price": cal.get("median_price"),
-                "r2": float(r2.get("r2", 0.0) or 0.0),
+                # Hide the suspect R² so the UI doesn't show 1.0 for LA.
+                "r2": None if issue else r2_value,
                 "availability_rate": float(cal.get("availability_rate", 0.0) or 0.0),
+                # New fields consumed by the frontend badge.
+                "data_quality_issue": issue,
+                "has_predictor": issue is None,
             }
         )
     return cards
+
 
 
 def _copy_maps() -> None:

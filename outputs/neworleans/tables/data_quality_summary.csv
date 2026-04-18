@@ -1,0 +1,6 @@
+city,rows_total,observed_rows,imputed_rows,room_type,observed_rate,imputed_rate
+neworleans,7285,6146,1139,ALL,0.8436513383665065,0.15634866163349348
+neworleans,6264,5377,887,Entire home/apt,0.8583971902937421,0.141602809706258
+neworleans,73,73,0,Hotel room,1.0,0.0
+neworleans,941,691,250,Private room,0.7343251859723698,0.26567481402763016
+neworleans,7,5,2,Shared room,0.7142857142857143,0.2857142857142857

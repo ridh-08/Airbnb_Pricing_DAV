@@ -1,0 +1,6 @@
+rank,neworleans_feature,neworleans_importance
+1,accommodates,0.3802418093789581
+2,availability_365,0.1748917821231271
+3,amenities_count,0.16312871435414011
+4,reviews_per_month,0.0936796661794043
+5,minimum_nights,0.04517889570928943

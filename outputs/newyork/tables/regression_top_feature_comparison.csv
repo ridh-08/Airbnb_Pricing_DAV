@@ -1,0 +1,6 @@
+rank,newyork_feature,newyork_importance
+1,room_Private room,0.3754831061499578
+2,availability_365,0.16888235101124793
+3,minimum_nights,0.13802966979382358
+4,amenities_count,0.12848814471712802
+5,accommodates,0.07276958799765873

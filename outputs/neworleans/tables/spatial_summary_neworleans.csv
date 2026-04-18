@@ -1,0 +1,2 @@
+city,geo_neighbourhoods,matched_neighbourhoods,coverage_rate,top_priced_neighbourhood,top_avg_price,morans_i,morans_i_expected,morans_i_p_value,morans_i_z_score,morans_i_significant,spatial_cluster_class
+neworleans,72,70,0.9722,Read Blvd East,277.6666666666667,-0.05801543866191332,-0.014492753623188406,0.465,-0.5910991257551858,False,not_significant

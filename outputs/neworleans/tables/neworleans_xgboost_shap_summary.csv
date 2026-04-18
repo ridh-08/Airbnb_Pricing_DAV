@@ -1,0 +1,46 @@
+feature,mean_abs_shap
+accommodates,0.3049998
+amenities_count,0.05976459
+reviews_per_month,0.05280438
+latitude,0.049383894
+longitude,0.048159048
+minimum_nights,0.04769988
+availability_365,0.02905413
+neigh_Marigny,0.021839395
+review_density,0.020005777
+number_of_reviews,0.017834496
+demand_score,0.014617007
+neigh_French Quarter,0.009363013
+neigh_Mid-City,0.0060667642
+neigh_Central Business District,0.0056040175
+room_Entire home/apt,0.005287257
+neigh_Lower Garden District,0.0048882673
+room_Private room,0.0028221477
+neigh_Audubon,0.0024336805
+neigh_Uptown,0.0022841706
+neigh_OTHER,0.0021869983
+neigh_Bayou St. John,0.0021563554
+neigh_Touro,0.0019911532
+neigh_Tulane - Gravier,0.0018683935
+neigh_Leonidas,0.0017438543
+neigh_Bywater,0.0015158012
+neigh_St. Claude,0.001431277
+neigh_East Riverside,0.0013716448
+neigh_Irish Channel,0.0012156336
+neigh_Treme - Lafitte,0.0011503634
+neigh_Central City,0.0011356294
+neigh_Seventh Ward,0.0011064202
+neigh_St. Roch,0.00084745314
+neigh_City Park,0.0005627178
+neigh_Fairgrounds,0.0003754267
+neigh_Milan,0.00033179455
+neigh_West Riverside,0.0002887347
+room_Hotel room,0.00026759176
+neigh_East Carrollton,0.00016324365
+neigh_St. Thomas Dev,0.00011757489
+neigh_Marlyville - Fontainbleau,0.00011184103
+neigh_Freret,7.2176575e-05
+neigh_Broadmoor,6.113618e-05
+neigh_Gentilly Terrace,3.4437402e-05
+room_Shared room,0.0
+neigh_Algiers Point,0.0

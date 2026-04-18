@@ -1,0 +1,2 @@
+city,morans_i,morans_i_p_value,morans_i_significant,spatial_cluster_class
+chicago,0.39819956071408086,0.001,True,significant_positive_moderate

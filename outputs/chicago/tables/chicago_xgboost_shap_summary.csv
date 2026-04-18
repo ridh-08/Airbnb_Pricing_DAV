@@ -1,0 +1,46 @@
+feature,mean_abs_shap
+accommodates,0.17503974
+room_Private room,0.1453787
+longitude,0.14118528
+latitude,0.124098405
+room_Entire home/apt,0.07324504
+reviews_per_month,0.067605734
+amenities_count,0.061060652
+minimum_nights,0.058295056
+demand_score,0.030707275
+availability_365,0.027801087
+number_of_reviews,0.01632043
+review_density,0.014753563
+neigh_Near West Side,0.0127496105
+neigh_Lake View,0.0069146915
+neigh_OTHER,0.006693555
+neigh_Logan Square,0.005700804
+neigh_Loop,0.0044242647
+room_Hotel room,0.0042343508
+neigh_Near North Side,0.0041829175
+neigh_West Town,0.0024518212
+room_Shared room,0.0022311923
+neigh_Hyde Park,0.0018730842
+neigh_Lincoln Park,0.0015566363
+neigh_Woodlawn,0.0015137432
+neigh_Uptown,0.0014422877
+neigh_Humboldt Park,0.001146257
+neigh_North Center,0.0011456455
+neigh_Lower West Side,0.0010193705
+neigh_Grand Boulevard,0.00088422984
+neigh_East Garfield Park,0.0008228367
+neigh_Bridgeport,0.00070687
+neigh_Near South Side,0.0005758236
+neigh_South Shore,0.00045830407
+neigh_Austin,0.00037492497
+neigh_Edgewater,0.0003467018
+neigh_Douglas,0.00034118866
+neigh_Lincoln Square,0.00020323457
+neigh_West Ridge,9.114329e-05
+neigh_Irving Park,8.6189786e-05
+neigh_Avondale,7.8786514e-05
+neigh_Rogers Park,6.255162e-05
+neigh_Armour Square,5.8547706e-05
+neigh_Albany Park,1.0740818e-05
+neigh_Kenwood,0.0
+neigh_Portage Park,0.0

@@ -1,0 +1,7 @@
+test_name,group_1,group_2,statistic,p_value,interpretation
+Mann-Whitney U (austin: room type),austin:Entire home/apt,austin:Private room,9652852.0,0.0,significant
+Mann-Whitney U (austin: room type),austin:Entire home/apt,austin:Shared room,580050.5,6.605036486393141e-44,significant
+Mann-Whitney U (austin: room type),austin:Private room,austin:Shared room,83128.0,5.575158262888687e-39,significant
+Mann-Whitney U (austin: room type),austin:Hotel room,austin:Shared room,2145.0,4.13569653423441e-16,significant
+Mann-Whitney U (austin: room type),austin:Hotel room,austin:Private room,39283.5,6.229332401528222e-16,significant
+Mann-Whitney U (austin: room type),austin:Entire home/apt,austin:Hotel room,88016.0,6.385506451219737e-05,significant
